@@ -1,51 +1,343 @@
----
-layout: default
----
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rayhaan Khan</title>
+<meta name="description" content="Rayhaan Khan is an A Level student in Navi Mumbai who works on machine learning research: rebuilding optimizer state for continual pre-training, test-time training, and diabetes risk screening. Founder of Mumbai AI Lab.">
+<meta name="author" content="Rayhaan Khan">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Rayhaan Khan">
+<meta property="og:description" content="Machine learning research and teaching. A Level student in Navi Mumbai, research intern at MBZUAI, founder of Mumbai AI Lab.">
+<meta property="og:url" content="https://rayhaan1345.github.io/">
+<meta property="og:image" content="https://rayhaan1345.github.io/assets/img/ttt-overview.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;1,400&family=Spectral+SC:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/site.css">
+<script>try{var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+</head>
+<body>
+<main class="page">
 
+<header class="intro">
+  <div>
+    <h1>Rayhaan Khan</h1>
+    <p class="role sc">Machine learning research &middot; Navi Mumbai, India</p>
+    <p>I am in my final year of Cambridge A Levels at Podar International School in Navi Mumbai. My research asks what a trained neural network needs in order to keep learning after release. At <a href="https://www.adialab.ae/">ADIA Lab</a> I worked on rebuilding the optimizer state that public checkpoints leave out, which became my first-author manuscript, now under review at TMLR. At <a href="https://mbzuai.ac.ae/">MBZUAI</a> I am testing test-time training, where a model updates part of its weights while it reads.</p>
+    <p>I also founded <a href="https://mailab.in">Mumbai AI Lab</a>, which teaches school students to use AI as a tutor that asks them questions. Away from the screen I photograph wildlife, read about shark biology and reread Tintin.</p>
+    <ul class="links">
+      <li><a href="cv.pdf">CV</a></li>
+      <li><a href="https://github.com/Rayhaan1345">GitHub</a></li>
+      <li><a href="https://www.linkedin.com/in/rrkhanrayhaan/">LinkedIn</a></li>
+      <li><a href="mailto:rayhaankhan1345@gmail.com">Email</a></li>
+      <li><a href="https://mailab.in">Mumbai AI Lab</a></li>
+    </ul>
+  </div>
+  <figure class="portrait">
+    <img src="assets/img/rayhaan.jpg" alt="Portrait of Rayhaan Khan" width="184" height="186">
+  </figure>
+</header>
 
+<section aria-labelledby="news">
+  <h2 id="news">News</h2>
+  <ul class="news">
+    <li><time datetime="2026-10">Oct 2026</time><span>Released <a href="https://github.com/Rayhaan1345/socratic-tutor">Socratic Tutor</a>, an open-source Claude plugin from Mumbai AI Lab, and submitted it to Anthropic's plugin directory.</span></li>
+    <li><time datetime="2026-10">Oct 2026</time><span>Released the code, configurations and interim report of my <a href="https://github.com/Rayhaan1345/inplace-ttt-study">In-Place TTT study</a> on Qwen3-4B.</span></li>
+    <li><time datetime="2026">2026</time><span>Started a research internship at MBZUAI with Dr Salman Khan and Hanoona Rasheed.</span></li>
+    <li><time datetime="2026">2026</time><span>Our manuscript on rebuilt optimizer state is under review at TMLR.</span></li>
+    <li><time datetime="2025-11">Nov 2025</time><span>Founded <a href="https://mailab.in">Mumbai AI Lab</a>.</span></li>
+    <li><time datetime="2025">2025</time><span>Finalist in the International Computer Science Competition.</span></li>
+    <li><time datetime="2025">2025</time><span>Mentored my school's grade 9 team to first place among 68 schools at the IIT Bombay National Robotics League.</span></li>
+  </ul>
+</section>
 
+<section aria-labelledby="research">
+  <h2 id="research">Research</h2>
+  <p class="lede">I study what happens to a network after training ends. How can training continue without losing what the network knew, and can the network adapt to new input at test time? Earlier work applied machine learning to diabetes screening.</p>
 
-
-
-<h3><code>About Me</code></h3>
-
-<div style="display: flex; max-width: 800px; margin: auto; gap: 20px;">
-    <!-- Container for Image and Links -->
-    <div style="flex: 1; display: flex; flex-direction: column; align-items: left; left: 20px;">
-        <!-- Image at the Top -->
-        <img src="pictureofme.png" alt="Your Name" style="width: 100%; max-width: 200px; height: auto; border-radius: 10px; margin-bottom: 10px;">
-        
-        <!-- Links Below Image -->
-        <div style="width: 100%; max-width: 400px; text-align: left;">
-            <a href="resume.pdf">CV</a> |
-            <a href="https://www.linkedin.com/in/rrkhanrayhaan/">Linkedin</a> |
-            <a href="https://github.com/rayhaan1345">Github</a> |
-                <a href="mailto:rayhaankhan1345@gmail.com">Email</a>
-            <div style="width: 100%; max-width: 400px; text-align: left; margin-bottom: 10px;">
-
-</div>
-        </div>
+  <article class="entry" id="ttt">
+    <figure class="teaser">
+      <svg viewBox="0 0 236 156" role="img" aria-labelledby="ttt-t">
+      <title id="ttt-t">Seed-averaged RULER effects by context length: the training effect ranges from minus 1.1 to plus 3.8 points, the update effect from minus 2.5 to plus 0.2.</title>
+      <line x1="30" x2="224" y1="110.9" y2="110.9" style="stroke:var(--rule)" stroke-width="0.6"/>
+      <text x="24" y="113.9" text-anchor="end" font-size="9" style="fill:var(--muted)">-2</text>
+      <line x1="30" x2="224" y1="84.8" y2="84.8" style="stroke:var(--rule)" stroke-width="1"/>
+      <text x="24" y="87.8" text-anchor="end" font-size="9" style="fill:var(--muted)">0</text>
+      <line x1="30" x2="224" y1="58.7" y2="58.7" style="stroke:var(--rule)" stroke-width="0.6"/>
+      <text x="24" y="61.7" text-anchor="end" font-size="9" style="fill:var(--muted)">+2</text>
+      <line x1="30" x2="224" y1="32.5" y2="32.5" style="stroke:var(--rule)" stroke-width="0.6"/>
+      <text x="24" y="35.5" text-anchor="end" font-size="9" style="fill:var(--muted)">+4</text>
+      <line x1="30" x2="224" y1="84.8" y2="84.8" style="stroke:var(--muted)" stroke-width="0.8"/>
+      <polyline points="30,70.4 68.8,57.4 107.6,35.1 146.4,99.2 185.2,44.3 224,74.3" fill="none" style="stroke:var(--teal)" stroke-width="1.6" stroke-linejoin="round"/>
+      <circle cx="30" cy="70.4" r="2.6" style="fill:var(--teal)"/>
+      <circle cx="68.8" cy="57.4" r="2.6" style="fill:var(--teal)"/>
+      <circle cx="107.6" cy="35.1" r="2.6" style="fill:var(--teal)"/>
+      <circle cx="146.4" cy="99.2" r="2.6" style="fill:var(--teal)"/>
+      <circle cx="185.2" cy="44.3" r="2.6" style="fill:var(--teal)"/>
+      <circle cx="224" cy="74.3" r="2.6" style="fill:var(--teal)"/>
+      <polyline points="30,84.8 68.8,87.4 107.6,90 146.4,82.2 185.2,83.5 224,117.5" fill="none" style="stroke:var(--coral)" stroke-width="1.6" stroke-linejoin="round"/>
+      <circle cx="30" cy="84.8" r="2.6" style="fill:var(--coral)"/>
+      <circle cx="68.8" cy="87.4" r="2.6" style="fill:var(--coral)"/>
+      <circle cx="107.6" cy="90" r="2.6" style="fill:var(--coral)"/>
+      <circle cx="146.4" cy="82.2" r="2.6" style="fill:var(--coral)"/>
+      <circle cx="185.2" cy="83.5" r="2.6" style="fill:var(--coral)"/>
+      <circle cx="224" cy="117.5" r="2.6" style="fill:var(--coral)"/>
+      <text x="30" y="138" text-anchor="middle" font-size="9" style="fill:var(--muted)">4k</text>
+      <text x="68.8" y="138" text-anchor="middle" font-size="9" style="fill:var(--muted)">8k</text>
+      <text x="107.6" y="138" text-anchor="middle" font-size="9" style="fill:var(--muted)">16k</text>
+      <text x="146.4" y="138" text-anchor="middle" font-size="9" style="fill:var(--muted)">32k</text>
+      <text x="185.2" y="138" text-anchor="middle" font-size="9" style="fill:var(--muted)">64k</text>
+      <text x="224" y="138" text-anchor="middle" font-size="9" style="fill:var(--muted)">YaRN</text>
+      <text x="30" y="14" font-size="10" style="fill:var(--ink-2)">RULER points, both seeds</text>
+      <circle cx="34" cy="148" r="2.6" style="fill:var(--teal)"/><text x="41" y="151" font-size="9.5" style="fill:var(--ink-2)">training effect</text>
+      <circle cx="122" cy="148" r="2.6" style="fill:var(--coral)"/><text x="129" y="151" font-size="9.5" style="fill:var(--ink-2)">update effect</text>
+      </svg>
+    </figure>
+    <div>
+      <h3><a href="https://github.com/Rayhaan1345/inplace-ttt-study/blob/main/paper/main.pdf">In-Place Test-Time Training on Qwen3-4B: A Controlled Ablation of the Test-Time Update</a></h3>
+      <p class="authors"><strong>Rayhaan Khan</strong></p>
+      <p class="venue">Interim report, 2026</p>
+      <p class="context">Research internship at MBZUAI with Dr Salman Khan and Hanoona Rasheed</p>
+      <ul class="actions">
+        <li><a href="https://github.com/Rayhaan1345/inplace-ttt-study/blob/main/paper/main.pdf">paper</a></li>
+        <li><a href="https://github.com/Rayhaan1345/inplace-ttt-study">code</a></li>
+        <li><button type="button" aria-expanded="false" aria-controls="ttt-figs">figures</button></li>
+      </ul>
+      <p class="summary">In-Place TTT turns the MLP down-projection in some layers of a language model into fast weights that update from the input during inference. Its published results on Qwen3-4B show long-context gains over a matched control. Those gains mix two causes, the update at test time and the training with the module.</p>
+      <p class="summary">I continued pretraining Qwen3-4B for 3 billion tokens with and without the module, on identical data in identical order. I then evaluated the trained model twice, with its update on and off. Switching the update off changes the RULER score by at most 0.4 points up to 64k tokens, so the gains come from training with the module. This text-model study is the baseline for porting the method to a Qwen vision-language model.</p>
     </div>
-</div>
+    <div class="figures" id="ttt-figs" hidden>
+      <figure class="fig">
+        <div class="chart-card">
+          <div class="seg" role="group" aria-label="Choose which difference to show">
+            <button type="button" data-series="total" aria-pressed="false">TTT minus control</button>
+            <button type="button" data-series="split" aria-pressed="true">split into two effects</button>
+          </div>
+          <svg id="ttt-chart" viewBox="0 0 640 300" role="img" aria-label="Interactive chart of RULER differences by context length"></svg>
+          <p class="chart-note" id="ttt-note">Hover or tap a point for its value and 95% interval.</p>
+        </div>
+        <figcaption><b>Where the gain comes from.</b> Differences in the RULER mean over 13 tasks, 500 instances per task, averaged over two seeds, with 95% bootstrap intervals. The <span style="color:var(--coral)">update effect</span> compares the trained TTT model with its update on and off. The <span style="color:var(--teal)">training effect</span> compares the update-off model with the control. Together they add up to the TTT arm's lead over the control. Data from the study's results file.</figcaption>
+      </figure>
+      <figure class="fig">
+        <div class="plate"><img src="assets/img/ttt-overview.png" alt="Study design: two arms trained on identical data, the TTT checkpoint evaluated with its update on and off, and the difference split into an update effect and a training effect." loading="lazy" width="1600" height="652"></div>
+        <figcaption><b>Study design.</b> Two arms continue pretraining from Qwen3-4B-Base on the same 3 billion tokens. The TTT checkpoint is evaluated twice next to the control, so the gain splits into what the test-time update adds and what training with the module changed. Figure 1 of the report.</figcaption>
+      </figure>
+    </div>
+  </article>
 
-<h6> Hi!, Thank you for visiting my website! I was an intern at M42 Health Abu Dhabi where I worked under Dr. Shadab Khan and built an ML powered diabetes predictor model and research report. Also, have recently been offered a place as Research Intern at Brown University for Cancer therapeutic methods with AI. I am Studying in Grade 10 in Podar International (CIE), Seawoods, Navi Mumbai, India. I love to delve deeper into concepts regarding Mathematics, AI, especially Deep Learning and Cancer Biology.
+  <article class="entry" id="optimizer-state">
+    <figure class="teaser">
+      <svg id="toy" viewBox="0 0 236 176" role="img" aria-labelledby="toy-t">
+        <title id="toy-t">Toy simulation: two Adam runs fine-tune from the same checkpoint on a narrow valley. The cold start jumps across the valley in its first steps; the run started from rebuilt optimizer state moves smoothly along it.</title>
+      </svg>
+      <figcaption><span><span style="color:var(--sand)">cold start</span> vs <span style="color:var(--teal)">rebuilt state</span>, toy</span><button type="button" class="replay" id="toy-replay">replay</button></figcaption>
+    </figure>
+    <div>
+      <h3><a href="https://drive.google.com/file/d/1VI6MjFcu0oSlswk5wuyVrYFZPcKXPKhP/view">Stable Continual Pre-training from Weights-Only Checkpoints via Rebuilt Optimizer State</a></h3>
+      <p class="authors"><strong>Rayhaan Khan</strong>, Shadab Khan</p>
+      <p class="venue">Under review at Transactions on Machine Learning Research (TMLR), 2026</p>
+      <p class="context">Research internship at ADIA Lab with Dr Shadab Khan, April 2025 to June 2026</p>
+      <ul class="actions">
+        <li><a href="https://drive.google.com/file/d/1VI6MjFcu0oSlswk5wuyVrYFZPcKXPKhP/view">manuscript</a></li>
+        <li><button type="button" aria-expanded="false" aria-controls="ms-figs">figures</button></li>
+      </ul>
+      <p class="summary">Public language-model checkpoints ship weights without the AdamW state that trained them, so continued pre-training restarts the optimizer from zero. The first steps of that cold start overshoot, and the model forgets part of what it knew. We show that about 200 short training steps on public data rebuild the useful part of the missing state.</p>
+      <p class="summary">Warm-starting from the rebuilt state removes the early overshoot. Used as an elastic weight consolidation anchor, it matches the target loss of a cold start with about three times less forgetting at 1B parameters. We tested it on models from GPT-2 (124M parameters) to LLaMA-3 (8B).</p>
+      <p class="mypart"><em>My part:</em> a pipeline that logged optimizer buffers while training a CIFAR-10 CNN, used to measure rebuilt state against the original.</p>
+    </div>
+    <div class="figures" id="ms-figs" hidden>
+      <figure class="fig">
+        <div class="plate"><img src="assets/img/ms-loss-curves.png" alt="Training loss over the first fine-tuning steps for GPT-2, Pythia 1B, Qwen2.5-3B and LLaMA-3 8B. The cold-start curve rises furthest above the checkpoint's loss in all four." loading="lazy" width="1600" height="537"></div>
+        <figcaption><b>The cold-start overshoot at four scales.</b> Training loss over the first fine-tuning steps, from GPT-2 (124M) to LLaMA-3 (8B). The cold start (sand) climbs furthest above the checkpoint's own loss (dashed line). Warm start from rebuilt state (navy) and the full recipe with the EWC anchor (teal) climb less.</figcaption>
+      </figure>
+      <figure class="fig">
+        <div class="plate"><img src="assets/img/ms-overview.png" alt="Method overview: about 200 fresh low-rate AdamW steps rebuild the optimizer state from a weights-only checkpoint; the state is used for a warm start and as an EWC Fisher anchor." loading="lazy" width="1005" height="474" style="max-width:640px;margin:0 auto"></div>
+        <figcaption><b>Method.</b> From a weights-only checkpoint, about 200 low-rate AdamW steps on public data rebuild the optimizer's moment estimates. The second moment approximates the Fisher diagonal, so it serves as an anchor against forgetting. Figure 1 of the manuscript.</figcaption>
+      </figure>
+      <figure class="fig">
+        <figcaption><b>About the toy on the left.</b> Both runs fine-tune with Adam and noisy gradients from the same checkpoint (ring), which lies on the floor of a narrow valley. With the state set to zero, the first step moves the full learning rate along both axes, so the cold start jumps across the valley and its loss rises. Rebuilt second-moment estimates from 200 tiny steps at the checkpoint shrink the steps along the steep, noisy axis. The small trace under the map is the loss of both runs. It is an illustration of the mechanism, with made-up numbers.</figcaption>
+      </figure>
+    </div>
+  </article>
 
-If you're looking for collaborators for Robotics/ML projects, please feel free to get in touch!</h6>
+  <article class="entry" id="diabetes">
+    <figure class="teaser">
+      <svg viewBox="0 0 236 156" role="img" aria-labelledby="fi-t">
+      <title id="fi-t">XGBoost feature importance (F score): glucose 213, BMI 190, age 123, diabetes pedigree 61, blood pressure 52, insulin 51, pregnancies 7, skin fold 3.</title>
+      <text x="12" y="14" font-size="10" style="fill:var(--ink-2)">Feature importance (F score)</text>
+      <text x="78" y="32.5" text-anchor="end" font-size="9.5" style="fill:var(--ink-2)">Glucose</text>
+      <rect x="84" y="25.5" width="122" height="9" rx="1" style="fill:var(--teal)"/>
+      <text x="210" y="32.5" font-size="9" style="fill:var(--muted)">213</text>
+      <text x="78" y="47.1" text-anchor="end" font-size="9.5" style="fill:var(--ink-2)">BMI</text>
+      <rect x="84" y="40.1" width="108.8" height="9" rx="1" style="fill:var(--teal)"/>
+      <text x="196.8" y="47.1" font-size="9" style="fill:var(--muted)">190</text>
+      <text x="78" y="61.7" text-anchor="end" font-size="9.5" style="fill:var(--ink-2)">Age</text>
+      <rect x="84" y="54.7" width="70.5" height="9" rx="1" style="fill:var(--teal)"/>
+      <text x="158.5" y="61.7" font-size="9" style="fill:var(--muted)">123</text>
+      <text x="78" y="76.3" text-anchor="end" font-size="9.5" style="fill:var(--ink-2)">Pedigree</text>
+      <rect x="84" y="69.3" width="34.9" height="9" rx="1" style="fill:var(--sand)"/>
+      <text x="122.9" y="76.3" font-size="9" style="fill:var(--muted)">61</text>
+      <text x="78" y="90.9" text-anchor="end" font-size="9.5" style="fill:var(--ink-2)">Blood pressure</text>
+      <rect x="84" y="83.9" width="29.8" height="9" rx="1" style="fill:var(--sand)"/>
+      <text x="117.8" y="90.9" font-size="9" style="fill:var(--muted)">52</text>
+      <text x="78" y="105.5" text-anchor="end" font-size="9.5" style="fill:var(--ink-2)">Insulin</text>
+      <rect x="84" y="98.5" width="29.2" height="9" rx="1" style="fill:var(--sand)"/>
+      <text x="117.2" y="105.5" font-size="9" style="fill:var(--muted)">51</text>
+      <text x="78" y="120.1" text-anchor="end" font-size="9.5" style="fill:var(--ink-2)">Pregnancies</text>
+      <rect x="84" y="113.1" width="4" height="9" rx="1" style="fill:var(--sand)"/>
+      <text x="92" y="120.1" font-size="9" style="fill:var(--muted)">7</text>
+      <text x="78" y="134.7" text-anchor="end" font-size="9.5" style="fill:var(--ink-2)">Skin fold</text>
+      <rect x="84" y="127.7" width="1.7" height="9" rx="1" style="fill:var(--sand)"/>
+      <text x="89.7" y="134.7" font-size="9" style="fill:var(--muted)">3</text>
+      </svg>
+    </figure>
+    <div>
+      <h3><a href="https://diabetes-predictor-model.streamlit.app">Diabetes Risk Screening from Routine Measurements</a></h3>
+      <p class="authors"><strong>Rayhaan Khan</strong></p>
+      <p class="venue">Technical report, 2024</p>
+      <p class="context">Research internship at M42, Abu Dhabi, with Dr Shadab Khan</p>
+      <ul class="actions">
+        <li><a href="https://diabetes-predictor-model.streamlit.app">demo</a></li>
+        <li><a href="https://github.com/Rayhaan1345/Diabetes-Predictor-Model">code</a></li>
+        <li><a href="https://drive.google.com/file/d/1zrdhEaEcZr6TzN8UQHBsRLb4PaENmrNy/view">report</a></li>
+        <li><button type="button" aria-expanded="false" aria-controls="dm-figs">figures</button></li>
+      </ul>
+      <p class="summary">I trained models to estimate diabetes risk from eight routine measurements, including glucose, BMI, blood pressure and age, on a public dataset of 768 patients. I compared fastai and XGBoost models, explained predictions with feature importance and checked accuracy across subgroups. The deployed web app lets a user change the inputs and get a new estimate. The repository follows Microsoft's Team Data Science Process, from project charter to customer acceptance.</p>
+    </div>
+    <div class="figures" id="dm-figs" hidden>
+      <figure class="fig">
+        <div class="plate"><img src="assets/img/diabetes-app.png" alt="The diabetes risk web app, with sliders for glucose, BMI, insulin, blood pressure, pregnancies and age, and a risk estimate of 0.36 for the default inputs." loading="lazy" width="776" height="1020" style="max-width:520px;margin:0 auto"></div>
+        <figcaption><b>The demo app.</b> Sliders set the inputs and the model returns a risk estimate between 0 and 1. It is a student project and not a medical tool.</figcaption>
+      </figure>
+    </div>
+  </article>
+</section>
 
-<hr>
+<section aria-labelledby="teaching">
+  <h2 id="teaching">Teaching and open source</h2>
 
-<h2><mark>Research</mark></h2>
-<h6>
-    I am fluent in training ML models on a variety of different tasks and data. I have built many projects- but the cornerstone of them being the diabetes predictor model trained and deployed during my internship at M42 Health.
-</h6>
+  <article class="entry" id="socratic">
+    <figure class="teaser">
+      <svg viewBox="0 0 236 156" role="img" aria-labelledby="hl-t">
+      <title id="hl-t">The hint ladder: a nudge, then the relevant concept, then a worked step, then the full answer, each given only when the student stalls.</title>
+      <text x="12" y="16" font-size="10" style="fill:var(--ink-2)">What have you tried so far?</text>
+      <rect x="14" y="112" width="48" height="24" rx="1.5" style="fill:var(--navy);opacity:0.35"/>
+      <text x="38.0" y="149" text-anchor="middle" font-size="9" style="fill:var(--ink-2)">nudge</text>
+      <text x="38.0" y="126" text-anchor="middle" font-size="10" font-weight="600" style="fill:#fff">1</text>
+      <rect x="66" y="90" width="48" height="46" rx="1.5" style="fill:var(--navy);opacity:0.55"/>
+      <text x="90.0" y="149" text-anchor="middle" font-size="9" style="fill:var(--ink-2)">concept</text>
+      <text x="90.0" y="104" text-anchor="middle" font-size="10" font-weight="600" style="fill:#fff">2</text>
+      <rect x="118" y="68" width="48" height="68" rx="1.5" style="fill:var(--navy);opacity:0.78"/>
+      <text x="142.0" y="149" text-anchor="middle" font-size="9" style="fill:var(--ink-2)">worked step</text>
+      <text x="142.0" y="82" text-anchor="middle" font-size="10" font-weight="600" style="fill:#fff">3</text>
+      <rect x="170" y="46" width="48" height="90" rx="1.5" style="fill:var(--navy);opacity:1"/>
+      <text x="194.0" y="149" text-anchor="middle" font-size="9" style="fill:var(--ink-2)">full answer</text>
+      <text x="194.0" y="60" text-anchor="middle" font-size="10" font-weight="600" style="fill:#fff">4</text>
+      <path d="M20 56 C 70 52, 140 46, 196 36" fill="none" style="stroke:var(--coral)" stroke-width="1.2" stroke-dasharray="3 3"/>
+      <path d="M190 32 L198 36 L190 40" fill="none" style="stroke:var(--coral)" stroke-width="1.2"/>
+      <text x="20" y="44" font-size="9" font-style="italic" style="fill:var(--coral)">only when the student stalls</text>
+      </svg>
+    </figure>
+    <div>
+      <h3><a href="https://github.com/Rayhaan1345/socratic-tutor">Socratic Tutor, a Claude plugin that teaches by asking</a></h3>
+      <p class="authors">Mumbai AI Lab</p>
+      <p class="venue">Open source (MIT), 2026. Submitted to Anthropic's plugin directory</p>
+      <ul class="actions">
+        <li><a href="https://github.com/Rayhaan1345/socratic-tutor">code</a></li>
+        <li><a href="https://github.com/Rayhaan1345/socratic-tutor#install">install</a></li>
+        <li><a href="https://mailab.in">lab</a></li>
+      </ul>
+      <p class="summary">With the plugin installed, Claude asks a student what they have tried, finds the one step that blocks them and asks one question per turn. Help rises only when the student stalls, from a nudge to the relevant concept, then a worked step, then the full solution. The design follows a <a href="https://papers.ssrn.com/abstract=4895486">field experiment</a> with nearly 1,000 high school students. Those who practised with an unrestricted chatbot scored 17% lower on a later exam, and a version that gave hints removed most of that harm.</p>
+    </div>
+  </article>
 
-<hr>
-<h3>Publications</h3>
-<a href="https://drive.google.com/file/d/1zrdhEaEcZr6TzN8UQHBsRLb4PaENmrNy/view">Research paper for diabetes model</a>
--
-<a href="https://diabetes-predictor-model.streamlit.app/">Project Website</a>
-<hr>
+  <ul class="items">
+    <li>
+      <span class="what"><a href="https://mailab.in">Mumbai AI Lab</a>, founder</span><span class="when">Nov 2025 to now</span>
+      <p class="detail">Sessions on alternate Sundays at three levels teach school students to use AI as a questioning tutor, so they keep doing the reasoning. The sessions draw on studies of AI tutoring and retrieval practice.</p>
+    </li>
+    <li>
+      <span class="what">STEM Club, Podar International School, founder</span><span class="when">2024</span>
+      <p class="detail">Peer sessions on training a first model, and talks on AI for grade 3 classes. Mumbai AI Lab grew out of the club.</p>
+    </li>
+    <li>
+      <span class="what">IIT Bombay National Robotics League, team mentor</span><span class="when">2025</span>
+      <p class="detail">Guided my school's grade 9 team on Arduino control and a small vision model for obstacle avoidance. The team placed first among 68 schools.</p>
+    </li>
+  </ul>
+</section>
 
-<center>
-<a href="https://rkhanrayhaan.streamlit.app">Rayhaan Khan</a>
-</center>
+<section aria-labelledby="fieldwork">
+  <h2 id="fieldwork">Fieldwork</h2>
+  <div class="field">
+    <div>
+      <p class="field-title"><b>Intertidal survey, Juhu rocky shore, Mumbai</b> <span class="when">Marine Science, 2025</span></p>
+      <p class="detail">Quadrat sampling of the rocky shore and a Lincoln index estimate of a clam population. The index marks <i>M</i> clams, catches <i>C</i> later, counts the <i>R</i> marked clams among them and estimates the population as <span class="formula">N &asymp; MC/R</span>. We also recorded a juvenile bamboo shark in a rock pool.</p>
+    </div>
+      <svg viewBox="0 0 150 172" role="img" aria-labelledby="q-t">
+      <title id="q-t">A quadrat frame with clams, some of them marked.</title>
+      <rect x="8" y="8" width="134" height="134" fill="none" style="stroke:var(--ink-2)" stroke-width="2"/>
+      <line x1="41.5" x2="41.5" y1="8" y2="142" style="stroke:var(--rule)" stroke-width="1"/>
+      <line y1="41.5" y2="41.5" x1="8" x2="142" style="stroke:var(--rule)" stroke-width="1"/>
+      <line x1="75" x2="75" y1="8" y2="142" style="stroke:var(--rule)" stroke-width="1"/>
+      <line y1="75" y2="75" x1="8" x2="142" style="stroke:var(--rule)" stroke-width="1"/>
+      <line x1="108.5" x2="108.5" y1="8" y2="142" style="stroke:var(--rule)" stroke-width="1"/>
+      <line y1="108.5" y2="108.5" x1="8" x2="142" style="stroke:var(--rule)" stroke-width="1"/>
+      <ellipse cx="43.9" cy="28.2" rx="6" ry="4.3" transform="rotate(-7 43.9 28.2)" style="fill:var(--paper);stroke:var(--ink-2)" stroke-width="1"/>
+      <circle cx="43.9" cy="28.2" r="1.9" style="fill:var(--teal)"/>
+      <ellipse cx="62.7" cy="34.3" rx="6" ry="4.3" transform="rotate(-23.8 62.7 34.3)" style="fill:var(--paper);stroke:var(--ink-2)" stroke-width="1"/>
+      <ellipse cx="23.8" cy="63.4" rx="6" ry="4.3" transform="rotate(10.6 23.8 63.4)" style="fill:var(--paper);stroke:var(--ink-2)" stroke-width="1"/>
+      <ellipse cx="124.3" cy="110.5" rx="6" ry="4.3" transform="rotate(-17.9 124.3 110.5)" style="fill:var(--paper);stroke:var(--ink-2)" stroke-width="1"/>
+      <circle cx="124.3" cy="110.5" r="1.9" style="fill:var(--teal)"/>
+      <ellipse cx="106.3" cy="42.2" rx="6" ry="4.3" transform="rotate(-11.5 106.3 42.2)" style="fill:var(--paper);stroke:var(--ink-2)" stroke-width="1"/>
+      <ellipse cx="79.3" cy="48.6" rx="6" ry="4.3" transform="rotate(19.8 79.3 48.6)" style="fill:var(--paper);stroke:var(--ink-2)" stroke-width="1"/>
+      <ellipse cx="41.3" cy="125.4" rx="6" ry="4.3" transform="rotate(-14.3 41.3 125.4)" style="fill:var(--paper);stroke:var(--ink-2)" stroke-width="1"/>
+      <circle cx="41.3" cy="125.4" r="1.9" style="fill:var(--teal)"/>
+      <ellipse cx="52.6" cy="90" rx="6" ry="4.3" transform="rotate(4.7 52.6 90)" style="fill:var(--paper);stroke:var(--ink-2)" stroke-width="1"/>
+      <ellipse cx="102.4" cy="116.8" rx="6" ry="4.3" transform="rotate(32.3 102.4 116.8)" style="fill:var(--paper);stroke:var(--ink-2)" stroke-width="1"/>
+      <ellipse cx="119.8" cy="26.2" rx="6" ry="4.3" transform="rotate(-31.9 119.8 26.2)" style="fill:var(--paper);stroke:var(--ink-2)" stroke-width="1"/>
+      <circle cx="119.8" cy="26.2" r="1.9" style="fill:var(--teal)"/>
+      <ellipse cx="87.5" cy="95.3" rx="6" ry="4.3" transform="rotate(-35.1 87.5 95.3)" style="fill:var(--paper);stroke:var(--ink-2)" stroke-width="1"/>
+      <ellipse cx="75.7" cy="37" rx="6" ry="4.3" transform="rotate(-21.7 75.7 37)" style="fill:var(--paper);stroke:var(--ink-2)" stroke-width="1"/>
+      <ellipse cx="123.2" cy="83.5" rx="6" ry="4.3" transform="rotate(21.2 123.2 83.5)" style="fill:var(--paper);stroke:var(--ink-2)" stroke-width="1"/>
+      <circle cx="123.2" cy="83.5" r="1.9" style="fill:var(--teal)"/>
+      <ellipse cx="76" cy="64.8" rx="6" ry="4.3" transform="rotate(9.2 76 64.8)" style="fill:var(--paper);stroke:var(--ink-2)" stroke-width="1"/>
+      <ellipse cx="35" cy="52" rx="6" ry="4.3" transform="rotate(-21 35 52)" style="fill:var(--paper);stroke:var(--ink-2)" stroke-width="1"/>
+      <ellipse cx="21.5" cy="89.9" rx="6" ry="4.3" transform="rotate(-13.5 21.5 89.9)" style="fill:var(--paper);stroke:var(--ink-2)" stroke-width="1"/>
+      <circle cx="21.5" cy="89.9" r="1.9" style="fill:var(--teal)"/>
+      <ellipse cx="133.7" cy="39.1" rx="6" ry="4.3" transform="rotate(-25.8 133.7 39.1)" style="fill:var(--paper);stroke:var(--ink-2)" stroke-width="1"/>
+      <text x="75.0" y="166" text-anchor="middle" font-size="12" font-style="italic" style="fill:var(--muted)">N ≈ MC / R</text>
+      </svg>
+  </div>
+</section>
+
+<section aria-labelledby="awards">
+  <h2 id="awards">Awards</h2>
+  <ul class="awards">
+    <li><span>Finalist, International Computer Science Competition (ICSC)</span><span class="when">2025</span></li>
+    <li><span>First place among 68 schools, IIT Bombay National Robotics League, as team mentor</span><span class="when">2025</span></li>
+    <li><span>Third place, district inter-school 3D Printing Competition</span><span class="when">2024</span></li>
+    <li><span>Computer Wiz Award, Podar International School, for the highest computer science proficiency in the grade</span><span class="when">2022</span></li>
+  </ul>
+</section>
+
+<section aria-labelledby="education" class="edu">
+  <h2 id="education">Education</h2>
+  <p><b>Podar International School</b>, Nerul, Navi Mumbai. Cambridge International A Levels, graduating 2027, in Mathematics, Computer Science, Marine Science, Physics, Biology and English. Highest AS Level Marine Science result in the cohort.</p>
+  <p><b>Courses.</b> Harvard CS50P, Introduction to Programming with Python (2024, verified). fast.ai Practical Deep Learning for Coders (2022). Linear algebra and calculus for machine learning, self-taught.</p>
+  <p><b>Tools.</b> Python with NumPy, pandas, scikit-learn, PyTorch, XGBoost and fastai; Git; Arduino in C and C++; 3D printing.</p>
+  <p><b>Languages.</b> English and Hindi, fluent. German, beginner.</p>
+</section>
+
+<footer>
+  <span><a href="mailto:rayhaankhan1345@gmail.com">rayhaankhan1345@gmail.com</a></span>
+  <span>Last updated October 2026 &middot; <button type="button" class="theme-toggle" id="theme-toggle">dark mode</button></span>
+</footer>
+
+</main>
+<script src="assets/site.js" defer></script>
+</body>
+</html>
