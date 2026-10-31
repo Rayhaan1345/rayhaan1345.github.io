@@ -16,7 +16,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;1,400&family=Spectral+SC:wght@500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../../../assets/site.css?v=5">
 <link rel="stylesheet" href="../../../assets/project.css?v=5">
-<link rel="stylesheet" href="primer.css?v=6">
+<link rel="stylesheet" href="primer.css?v=7">
 <script>try{var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
 </head>
 <body>
@@ -78,7 +78,10 @@
   </div>
   <p class="cap"><b>A third of the women have diabetes, so saying "no" to all of them is right for the other two thirds.</b></p>
   <p>The data comes from a study of 768 women aged 21 or older. Glucose, BMI, blood pressure and five other things were measured, and the study recorded who had diabetes. Of the 768, 268 had diabetes, a base rate of 34.9%.</p>
-  <p>Switch to "always say no". The lazy model is right for 65.1% of the women and catches none of the 268 with diabetes. A grade of 65% sounds fine and hides a useless screening test.</p>
+  <div class="eqn" role="img" aria-label="Base rate: 268 women with diabetes divided by 768 women equals 34.9 percent"><span class="t c-coral"><b>268</b><i>women with diabetes</i></span><span class="op">&divide;</span><span class="t"><b>768</b><i>all women</i></span><span class="op">=</span><span class="t c-coral"><b>34.9%</b><i>base rate</i></span></div>
+  <p>Switch to "always say no". The lazy model calls all 500 women without diabetes correctly:</p>
+  <div class="eqn" role="img" aria-label="The lazy model's accuracy: 500 divided by 768 equals 65.1 percent"><span class="t c-navy"><b>500</b><i>women without diabetes</i></span><span class="op">&divide;</span><span class="t"><b>768</b><i>all women</i></span><span class="op">=</span><span class="t c-navy"><b>65.1%</b><i>lazy model's accuracy</i></span></div>
+  <p>It also catches none of the 268 women with diabetes. A grade of 65% sounds fine and hides a useless screening test.</p>
   <div class="break">
     <p><b>Common belief.</b> A model that is right two times in three has learned something.</p>
     <p><b>Why it fails.</b> The lazy model reaches 65% without reading any measurement.</p>
@@ -107,6 +110,8 @@
   </div>
   <p class="cap"><b>The split sets aside 154 women at random, and both groups keep about the same share with diabetes.</b></p>
   <p>Before any learning, the project set aside 154 of the 768 women. The model learns from the other 614 and is graded on the 154. Choosing the held-out women at random keeps the grade fair, because the two groups look alike.</p>
+  <div class="eqn" role="img" aria-label="Accuracy equals correct calls divided by the number of women graded"><span class="t"><b>accuracy</b></span><span class="op">=</span><span class="t c-teal"><b>correct calls</b><i>caught + cleared</i></span><span class="op">&divide;</span><span class="t"><b>women graded</b><i>614 in training, 154 held out</i></span></div>
+  <p>Meet Woman A, one of the 154 held-out women. Her glucose is 158 mg/dL, her BMI 31.6 and her age 28, and she had diabetes. The model never sees her label while it learns. You will follow her through the rest of the page.</p>
   <div class="break">
     <p><b>Analogy.</b> The training set is the practice paper with answers. The held-out set is the exam.</p>
     <p><b>Where it breaks.</b> An exam asks new questions on the same course. The held-out women come from the same study, so a good grade says little about women from a different population. The last section returns to this.</p>
@@ -134,7 +139,9 @@
     <p class="status" id="rl-note" aria-live="polite"></p>
   </div>
   <p class="cap"><b>Women with diabetes tend to have higher glucose, so one line already sorts most of them.</b></p>
-  <p>Drag the line or use the slider. The shaded side is called diabetes, and the four counts are the four outcomes of any yes-or-no test. The best cut-off on the training women is 144 mg/dL, and it is right for 75.3% of the held-out women.</p>
+  <p>Drag the line or use the slider. The shaded side is called diabetes, and the four counts are the four outcomes of any yes-or-no test. Accuracy counts the two kinds of correct call:</p>
+  <div class="eqn" role="img" aria-label="Training accuracy equals caught plus cleared, divided by 614"><span class="t"><b>training accuracy</b></span><span class="op">=</span><span class="op">(</span><span class="t c-teal"><b id="rl-eq-tp">68</b><i>caught</i></span><span class="op">+</span><span class="t c-teal"><b id="rl-eq-tn">388</b><i>cleared</i></span><span class="op">)</span><span class="op">&divide;</span><span class="t"><b>614</b><i>training women</i></span><span class="op">=</span><span class="t c-teal"><b id="rl-eq-acc">74.3%</b><i>moves with the line</i></span></div>
+  <p>Training this rule is a search. The computer tries all cut-offs from 60 to 199 and keeps the one with the highest training accuracy. That is 144 mg/dL, and it is right for 75.3% of the held-out women.</p>
   <p class="task"><b>Try this.</b> Move the line left until the rule catches most women with diabetes. Watch the false alarms.</p>
   <div class="break">
     <p><b>Where it breaks.</b> One rule reads one measurement. Two women with the same glucose get the same call, whatever their BMI or age.</p>
@@ -166,6 +173,8 @@
   </div>
   <p class="cap"><b>A tree with two questions splits the plot into four boxes, and the box decides the call.</b></p>
   <p>This tree asks about glucose first and BMI second. Coral dots had diabetes and navy dots did not. A box turns coral when most of its training women had diabetes, and the number in a box is that share. Press "Let the computer choose" to run the search that training performs.</p>
+  <p>Where does Woman A go? Her glucose of 158 and BMI of 31.6 put her in one box, marked A. The share of training women with diabetes in that box decides her call:</p>
+  <div class="eqn" role="img" aria-label="Share with diabetes in Woman A's box equals women with diabetes in the box divided by all women in the box"><span class="t"><b>share in her box</b><i id="tr-eq-box"></i></span><span class="op">=</span><span class="t c-coral"><b id="tr-eq-a">118</b><i>had diabetes</i></span><span class="op">&divide;</span><span class="t"><b id="tr-eq-n">163</b><i>women in the box</i></span><span class="op">=</span><span class="t c-coral"><b id="tr-eq-s">72%</b><i id="tr-eq-call">more than half: call yes</i></span></div>
   <div class="break">
     <p><b>Analogy.</b> A tree resembles a game of twenty questions.</p>
     <p><b>Where it breaks.</b> In the game you pick the next question as you go. A tree's questions are fixed when training ends, and it asks all women the same questions in the same order.</p>
@@ -191,6 +200,8 @@
   </div>
   <p class="cap"><b>Training accuracy climbs to 100% as the tree deepens, while held-out accuracy drifts down from its peak near depth 2.</b></p>
   <p>These trees use all eight measurements. A deep tree carves the women into many small boxes. With no depth limit it makes about 109 leaves for 614 women, about six women per leaf, so it has in effect memorised them. The curves average 50 random splits, because one held-out set of 154 women is noisy. The band shows where most of those splits fall.</p>
+  <div class="eqn" role="img" aria-label="The gap equals training accuracy minus held-out accuracy"><span class="t c-navy"><b id="dp-eq-tr">76.7%</b><i>training</i></span><span class="op">&minus;</span><span class="t c-coral"><b id="dp-eq-he">74.7%</b><i>held out</i></span><span class="op">=</span><span class="t"><b id="dp-eq-gap">2.0</b><i>gap, in points</i></span></div>
+  <p>The gap is the clearest sign of overfitting. It stays small for shallow trees and grows to about 30 points with no depth limit.</p>
   <div class="break">
     <p><b>Common belief.</b> A model that is right about nearly all its training women will be right about new women too.</p>
     <p><b>Why it fails.</b> The deepest tree is right about all its training women and wrong about three in ten new ones.</p>
@@ -218,7 +229,11 @@
     <p class="status" id="bo-note" aria-live="polite"></p>
   </div>
   <p class="cap"><b>As trees are added, women with diabetes drift right and women without drift left.</b></p>
-  <p>The model rebuilt from the project report uses 100 trees of depth 3 and a learning rate of 0.01. It starts all women at the training average, 0.347, and the trees move their scores from there. Press Play to add trees. With a learning rate this small, the scores spread slowly and end between about 0.15 and 0.70.</p>
+  <p>How does a new tree know what to fix? It looks at the gap between a woman's label and her current score. Before any tree, all women score 0.347, the training average. A woman with diabetes has a gap of 1 &minus; 0.347 = 0.653, and a woman without has a gap of &minus;0.347. The new tree sorts the training women into leaves, and a leaf moves its women's scores by a small part of their average gap:</p>
+  <div class="eqn" role="img" aria-label="New score equals old score plus the learning rate times the average gap in the woman's leaf"><span class="t"><b>new score</b></span><span class="op">=</span><span class="t"><b>old score</b></span><span class="op">+</span><span class="t c-teal"><b>0.01</b><i>learning rate</i></span><span class="op">&times;</span><span class="t c-coral"><b>average gap</b><i>in her leaf</i></span></div>
+  <p>That is a slightly simplified picture, since XGBoost also shrinks the step in leaves with few women. The model rebuilt from the project report uses 100 trees of depth 3. Press Play to add trees, and follow Woman A, the ringed dot in the top row:</p>
+  <div class="eqn" role="img" aria-label="Woman A's score equals the starting score plus the sum of the trees' steps"><span class="t"><b>Woman A's score</b><i>after <span id="bo-eq-k">0</span> trees</i></span><span class="op">=</span><span class="t"><b>0.347</b><i>start</i></span><span class="op">+</span><span class="t c-teal"><b id="bo-eq-sum">+0.000</b><i>sum of the trees' steps</i></span><span class="op">=</span><span class="t c-coral"><b id="bo-eq-s">0.347</b><i>her score</i></span></div>
+  <p>With a learning rate this small, the scores spread slowly and end between about 0.15 and 0.70.</p>
   <div class="break">
     <p><b>Analogy.</b> Boosting resembles a row of editors passing a draft along, with the next editor fixing what the last one missed.</p>
     <p><b>Where it breaks.</b> An editor can rewrite a whole sentence. A tree only shifts scores by a small step set by the learning rate, so no single tree fixes much.</p>
@@ -248,7 +263,11 @@
     <p class="status" id="un-note" aria-live="polite"></p>
   </div>
   <p class="cap"><b>The weights tilt the dashed line and the bias moves it, and darker teal marks a larger output.</b></p>
-  <p>The inputs are scaled first: subtract the training average and divide by the spread, so glucose and BMI have similar sizes. A larger weight on glucose makes the unit care more about glucose, which tilts the line.</p>
+  <p>The inputs are scaled first, so that glucose and BMI have similar sizes. Here is Woman A's glucose, marked A on the plot:</p>
+  <div class="eqn" role="img" aria-label="Scaled glucose equals her glucose minus the training average, divided by the spread"><span class="t"><b>scaled glucose</b></span><span class="op">=</span><span class="op">(</span><span class="t"><b>158</b><i>her glucose</i></span><span class="op">&minus;</span><span class="t"><b>120.9</b><i>training average</i></span><span class="op">)</span><span class="op">&divide;</span><span class="t"><b>32.0</b><i>spread</i></span><span class="op">=</span><span class="t c-navy"><b>1.16</b></span></div>
+  <p>Her BMI of 31.6 is close to the training average of 32.0, so it scales to &minus;0.05. The unit then weighs the two, adds the bias and applies ReLU:</p>
+  <div class="eqn" role="img" aria-label="Output equals ReLU of weight times scaled glucose plus weight times scaled BMI plus bias"><span class="t c-teal"><b id="un-eq-out">0.70</b><i>her output</i></span><span class="op">=</span><span class="op">ReLU(</span><span class="t"><b id="un-eq-wg">1.5</b><i>weight</i></span><span class="op">&times;</span><span class="t c-navy"><b>1.16</b><i>glucose</i></span><span class="op">+</span><span class="t"><b id="un-eq-wb">0.8</b><i>weight</i></span><span class="op">&times;</span><span class="t c-navy"><b>&minus;0.05</b><i>BMI</i></span><span class="op">+</span><span class="t"><b id="un-eq-b">&minus;1.0</b><i>bias</i></span><span class="op">)</span></div>
+  <p>Move the sliders and watch her output change. A larger weight on glucose makes the unit care more about glucose, which tilts the line. When the sum inside the brackets turns negative, ReLU outputs zero and the unit is off for her.</p>
   <p class="task"><b>Try this.</b> Set the weight on BMI to 0. What happens to the line, and why?</p>
   <details class="task-a"><summary>Answer</summary><p>The line turns vertical. The unit now ignores BMI, so only glucose decides whether it switches on.</p></details>
   <div class="recall">
@@ -269,12 +288,22 @@
   </dl>
   <p class="claim">Training sets all 27,452 numbers together, by nudging them again and again to shrink the error on the training women.</p>
   <div class="card" id="nt">
-    <div class="bar"><button type="button" class="btn" id="nt-run">Send a woman through</button></div>
-    <svg id="nt-svg" role="img" aria-label="The deployed network: eight inputs, a layer of 200 units, a layer of 100 units and one output score"></svg>
+    <div class="bar"><div class="group" role="group" aria-label="Woman" id="nt-views"></div><button type="button" class="btn" id="nt-run">Run the model</button></div>
+    <svg id="nt-svg" role="img" aria-label="One woman's eight measurements passing through the deployed network: layer 1, layer 2 and the output score"></svg>
+    <p class="status" id="nt-note" aria-live="polite"></p>
   </div>
-  <p class="cap"><b>Measurements enter on the left and a single score leaves on the right, after two layers of units.</b></p>
-  <p>A unit in the second layer reads the outputs of the first, so it can respond to bends and corners built from many lines. The final unit combines the second layer into one number, and a squashing step, the sigmoid, maps it into the range 0 to 1.2. Age and the number of pregnancies enter as categories, through embeddings.</p>
-  <p>Training measures the error, which is the average squared gap between a woman's score and her label, 0 or 1. It works out the gradient for all weights and moves them a small step downhill. This model trained for 11 epochs, in batches of 128 women. You can watch the units respond in <a href="../#try">Try the model</a> on the project page.</p>
+  <p class="cap"><b>A prediction flows from left to right, and in a layer only some units switch on.</b></p>
+  <p>Pick a woman and press Run the model. The figure draws 10 of the 200 units in layer 1 and 8 of the 100 in layer 2. They are units that switch on for about half of the women. A filled unit is switched on, and a darker fill means a larger output. An empty circle is a unit that ReLU switched off for this woman.</p>
+  <p>A unit in the second layer reads the outputs of the first, so it can respond to bends and corners built from many lines. Age and the number of pregnancies, drawn as squares, enter as categories through embeddings.</p>
+  <p>The final unit adds up the second layer into one number, called z. A squashing function, the sigmoid, turns any z into a number between 0 and 1, and the model stretches that to the range 0 to 1.2:</p>
+  <div class="eqn" role="img" aria-label="Score equals 1.2 times the sigmoid of z"><span class="t c-coral"><b id="nt-eq-score">&hellip;</b><i>her score</i></span><span class="op">=</span><span class="t"><b>1.2</b><i>top of the range</i></span><span class="op">&times;</span><span class="op">sigmoid(</span><span class="t c-teal"><b id="nt-eq-z">&hellip;</b><i>z, the final sum</i></span><span class="op">)</span></div>
+  <div class="eqn" role="img" aria-label="The sigmoid of z equals 1 divided by 1 plus e to the minus z"><span class="t"><b>sigmoid(z)</b></span><span class="op">=</span><span class="t"><b>1</b></span><span class="op">&divide;</span><span class="op">(</span><span class="t"><b>1</b></span><span class="op">+</span><span class="t"><b>e<sup>&minus;z</sup></b><i>e is about 2.718</i></span><span class="op">)</span></div>
+  <p>A large positive z gives a sigmoid close to 1, a large negative z gives one close to 0, and z = 0 gives one half.</p>
+  <p>Training measures the error, which is how far scores fall from labels, squared and averaged over the training women. Here is the term for the woman you picked:</p>
+  <div class="eqn" role="img" aria-label="Her error term equals her score minus her label, squared"><span class="op">(</span><span class="t c-coral"><b id="nt-eq-s2">&hellip;</b><i>her score</i></span><span class="op">&minus;</span><span class="t"><b id="nt-eq-y">&hellip;</b><i>her label</i></span><span class="op">)<sup>2</sup></span><span class="op">=</span><span class="t"><b id="nt-eq-err">&hellip;</b><i>her error term</i></span></div>
+  <p>Training then works out the gradient. For a weight, it says which direction of change would shrink the average error, and how steeply. Training moves all 27,452 weights a small step in that direction, then repeats:</p>
+  <div class="eqn" role="img" aria-label="New weight equals old weight minus the learning rate times the gradient"><span class="t"><b>new weight</b></span><span class="op">=</span><span class="t"><b>old weight</b></span><span class="op">&minus;</span><span class="t c-teal"><b>learning rate</b></span><span class="op">&times;</span><span class="t c-coral"><b>gradient</b></span></div>
+  <p>This model made 11 passes through the training women, in batches of 128. You can watch the units respond to your own numbers in <a href="../#try">Try the model</a> on the project page.</p>
   <div class="break">
     <p><b>Analogy.</b> Layers resemble stages on an assembly line.</p>
     <p><b>Where it breaks.</b> Training adjusts all stages at once, using the error measured at the end of the line.</p>
@@ -309,6 +338,8 @@
   </div>
   <p class="cap"><b>No cut-off separates the two rows cleanly, so any choice trades misses against false alarms.</b></p>
   <p>The dots are the 154 held-out women, placed by the rebuilt model's score. The right balance depends on the cost of a missed case against the cost of a follow-up test.</p>
+  <div class="eqn" role="img" aria-label="Sensitivity equals caught divided by caught plus missed"><span class="t"><b>sensitivity</b></span><span class="op">=</span><span class="t c-teal"><b id="co-eq-tp">29</b><i>caught</i></span><span class="op">&divide;</span><span class="op">(</span><span class="t"><b id="co-eq-tp2">29</b><i>caught</i></span><span class="op">+</span><span class="t c-coral"><b id="co-eq-fn">26</b><i>missed</i></span><span class="op">)</span><span class="op">=</span><span class="t c-teal"><b id="co-eq-sens">52.7%</b></span></div>
+  <div class="eqn" role="img" aria-label="Specificity equals cleared divided by cleared plus false alarms"><span class="t"><b>specificity</b></span><span class="op">=</span><span class="t c-teal"><b id="co-eq-tn">92</b><i>cleared</i></span><span class="op">&divide;</span><span class="op">(</span><span class="t"><b id="co-eq-tn2">92</b><i>cleared</i></span><span class="op">+</span><span class="t c-coral"><b id="co-eq-fp">7</b><i>false alarms</i></span><span class="op">)</span><span class="op">=</span><span class="t c-teal"><b id="co-eq-spec">92.9%</b></span></div>
   <div class="break">
     <p><b>Common belief.</b> A score of 0.6 means a 60% chance of diabetes.</p>
     <p><b>Why it fails.</b> Training pushed scores toward 0 or 1, and nobody checked whether a 0.6 matches a 60% rate. The network's scores even run up to 1.2.</p>
@@ -334,7 +365,9 @@
     <svg id="ct-svg" role="img" aria-label="For the eight inputs, how often the trees ask about them and how much accuracy drops when they are shuffled"></svg>
   </div>
   <p class="cap"><b>The trees ask about blood pressure and insulin around 50 times, and shuffling them costs no accuracy.</b></p>
-  <p>Shuffling one input among the held-out women keeps its values but breaks their link to the outcome. If accuracy drops, the model was using that input. Glucose loses the most, about 18 points. Shuffling blood pressure or insulin costs no accuracy, although the trees ask about them often, probably to make small adjustments that cancel out.</p>
+  <p>Shuffling one input among the held-out women keeps its values but breaks their link to the outcome. If accuracy drops, the model was using that input. The test repeats the shuffle 50 times and averages the drop. For glucose:</p>
+  <div class="eqn" role="img" aria-label="Glucose's importance equals accuracy before minus accuracy after shuffling glucose"><span class="t c-coral"><b>18.4</b><i>points lost</i></span><span class="op">=</span><span class="t"><b>78.6%</b><i>accuracy as it is</i></span><span class="op">&minus;</span><span class="t"><b>60.2%</b><i>with glucose shuffled</i></span></div>
+  <p>Shuffling blood pressure or insulin costs no accuracy, although the trees ask about them often, probably to make small adjustments that cancel out.</p>
   <div class="break">
     <p><b>Common belief.</b> The input a model asks about most often matters most.</p>
     <p><b>Why it fails.</b> A count measures habit. Blood pressure gets 52 questions and no measurable effect.</p>
@@ -365,6 +398,7 @@
   </div>
   <p class="cap"><b>Glucose adds a different amount depending on when it arrives, and averaging over orders settles its share.</b></p>
   <p>This toy uses three inputs and made-up numbers so that the sums stay visible. The left table gives the score for any set of known inputs. Click an order to build the score in that order. The bottom row averages the six orders, and the three averages add up to 0.32.</p>
+  <div class="eqn" role="img" aria-label="Her score equals the average plus the shares of glucose, BMI and age"><span class="t"><b>0.67</b><i>her score</i></span><span class="op">=</span><span class="t"><b>0.35</b><i>average score</i></span><span class="op">+</span><span class="t c-coral"><b>0.215</b><i>glucose</i></span><span class="op">+</span><span class="t c-navy"><b>0.070</b><i>BMI</i></span><span class="op">+</span><span class="t c-sand"><b>0.035</b><i>age</i></span></div>
   <p>For trees, an algorithm called TreeSHAP computes these averages without listing all the orders, so it stays fast with eight inputs. The project page runs it in your browser in <a href="../#explain">Explain one score</a>.</p>
   <div class="recall">
     <p class="recall-h">Quick quiz</p>
@@ -422,6 +456,7 @@
 </main>
 <script src="../../../assets/site.js?v=5" defer></script>
 <script src="../xgb.js?v=5" defer></script>
-<script src="primer.js?v=6" defer></script>
+<script src="../net.js?v=5" defer></script>
+<script src="primer.js?v=7" defer></script>
 </body>
 </html>

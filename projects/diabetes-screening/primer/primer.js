@@ -61,6 +61,15 @@
     return { input: inp, show: show, get: function () { return Number(inp.value); }, set: function (v) { inp.value = v; show(); } };
   }
   function count(D, sel) { var n = 0; for (var i = 0; i < D.y.length; i++) if (sel(i)) n++; return n; }
+  function setText(id, v) { var n = $(id); if (n) n.textContent = v; }
+  function signed(v, d) { return (v < 0 ? "−" : "+") + Math.abs(v).toFixed(d); }
+  // Woman A is held-out row 31 (glucose 158, BMI 31.6, had diabetes). The page follows her from section 2 on.
+  var A = 31;
+  // A ring with a letter, to mark Woman A on a plot.
+  function markA(svg, x, y) {
+    el("circle", { cx: x, cy: y, r: 7, style: "fill:none;stroke:var(--ink)", "stroke-width": 2 }, svg);
+    text(svg, x + 10, y - 7, "A", { "font-size": 13, "font-weight": 600, style: "fill:var(--ink);paint-order:stroke;stroke:var(--paper);stroke-width:4px" });
+  }
 
   Promise.all([
     fetch("data.json").then(function (r) { return r.json(); }),
@@ -73,7 +82,7 @@
     D.y.forEach(function (v, i) { (D.test[i] ? D.held : D.train).push(i); });
     waffle(D, "wf", [0, 1], ["the data", "always say no"]);
     waffle(D, "sp", [0, 2], ["all 768", "80/20 split"]);
-    rule(D); tree(D); depth(D); unit(D); network(); splitCounts(X); zeros(D);
+    rule(D); tree(D); depth(D); unit(D); network(D); splitCounts(X); zeros(D);
     if (typeof DiabetesXGB !== "undefined") { var S = scores(D, X); boost(D, S); cutoff(D, S); }
     shapley();
   });
@@ -182,6 +191,7 @@
       D.train.forEach(function (i) { var call = D.g[i] >= c; if (D.y[i]) { if (call) tp++; else fn++; } else { if (call) fp++; else tn++; } });
       var held = D.held.filter(function (i) { return (D.g[i] >= c ? 1 : 0) === D.y[i]; }).length;
       counts($("rl-counts"), tp, fn, fp, tn);
+      setText("rl-eq-tp", tp); setText("rl-eq-tn", tn); setText("rl-eq-acc", pct((tp + tn) / D.train.length));
       note.textContent = "Training accuracy " + pct((tp + tn) / D.train.length) + ". Held-out accuracy " + pct(held / D.held.length) + ".";
     }
     var drag = false;
@@ -239,6 +249,7 @@
       G.hl = el("line", { style: "stroke:var(--ink)", "stroke-width": 2 }, svg);
       G.hh = el("line", { style: "stroke:var(--ink)", "stroke-width": 2 }, svg);
       for (k = 0; k < 4; k++) G.labels.push(text(svg, 0, 0, "", { "text-anchor": "middle", "font-size": 13, "font-weight": 600, style: "fill:var(--ink);paint-order:stroke;stroke:var(--paper);stroke-width:4px" }));
+      markA(svg, X(D.g[A]), Y(D.b[A]));
       [60, 100, 140, 180].forEach(function (g) { text(svg, X(g), H - m.b + 15, String(g), { "text-anchor": "middle", "font-size": 12, style: "fill:var(--muted)" }); });
       [20, 30, 40, 50].forEach(function (b) { text(svg, m.l - 6, Y(b) + 4, String(b), { "text-anchor": "end", "font-size": 12, style: "fill:var(--muted)" }); });
       text(svg, (m.l + W - m.r) / 2, H - 4, "glucose, mg/dL", { "text-anchor": "middle", "font-size": 13, style: "fill:var(--ink-2)" });
@@ -269,6 +280,10 @@
       G.v.setAttribute("x1", x); G.v.setAttribute("x2", x); G.v.setAttribute("y1", y0); G.v.setAttribute("y2", y1);
       G.hl.setAttribute("x1", x0); G.hl.setAttribute("x2", x); G.hl.setAttribute("y1", Y(bl)); G.hl.setAttribute("y2", Y(bl));
       G.hh.setAttribute("x1", x); G.hh.setAttribute("x2", x1); G.hh.setAttribute("y1", Y(bh)); G.hh.setAttribute("y2", Y(bh));
+      var ka = leafOf(A, g, bl, bh), sa = L[ka], na = sa[0] + sa[1], yes = sa[1] > sa[0];
+      setText("tr-eq-box", names[ka]); setText("tr-eq-a", sa[1]); setText("tr-eq-n", na);
+      setText("tr-eq-s", na ? Math.round(100 * sa[1] / na) + "%" : "none");
+      setText("tr-eq-call", yes ? "more than half: call yes" : "half or less: call no");
       note.textContent = "Training accuracy " + pct(ok / D.train.length) + ". Held-out accuracy " + pct(held / D.held.length) + ". The numbers in the boxes give the share with diabetes.";
     }
     // Training: try all questions on a grid and keep the ones with the most correct training calls.
@@ -343,11 +358,18 @@
 
   function boost(D, S) {
     var svg = $("bo-svg"), note = $("bo-note"), k = $("bo-k"), out = $("bo-val"), play = $("bo-play"), P = null, timer = 0;
-    function build() { P = strips(svg, D); P.cut.setAttribute("stroke-dasharray", "5 4"); P.cut.setAttribute("x1", P.X(0.5)); P.cut.setAttribute("x2", P.X(0.5)); update(); }
+    function build() {
+      P = strips(svg, D); P.cut.setAttribute("stroke-dasharray", "5 4"); P.cut.setAttribute("x1", P.X(0.5)); P.cut.setAttribute("x2", P.X(0.5));
+      P.ring = el("circle", { cy: P.dots[A].getAttribute("cy"), r: 7, style: "fill:none;stroke:var(--ink)", "stroke-width": 2 }, svg);
+      P.ringA = text(svg, 0, Number(P.dots[A].getAttribute("cy")) - 9, "A", { "text-anchor": "middle", "font-size": 13, "font-weight": 600, style: "fill:var(--ink);paint-order:stroke;stroke:var(--paper);stroke-width:4px" });
+      update();
+    }
     function update() {
       var n = Number(k.value), s = S[n];
       out.textContent = n;
       for (var i in P.dots) P.dots[i].setAttribute("cx", P.X(s[i]).toFixed(1));
+      P.ring.setAttribute("cx", P.X(s[A]).toFixed(1)); P.ringA.setAttribute("x", P.X(s[A]).toFixed(1));
+      setText("bo-eq-k", n); setText("bo-eq-sum", signed(s[A] - S[0][A], 3)); setText("bo-eq-s", s[A].toFixed(3));
       var held = D.held.filter(function (i) { return (s[i] > 0.5 ? 1 : 0) === D.y[i]; }).length;
       var tr = D.train.filter(function (i) { return (s[i] > 0.5 ? 1 : 0) === D.y[i]; }).length;
       var lo = Math.min.apply(null, D.held.map(function (i) { return s[i]; })), hi = Math.max.apply(null, D.held.map(function (i) { return s[i]; }));
@@ -380,6 +402,8 @@
       P.cut.setAttribute("x1", P.X(c)); P.cut.setAttribute("x2", P.X(c));
       D.held.forEach(function (i) { var call = s[i] > c; if (D.y[i]) { if (call) tp++; else fn++; } else { if (call) fp++; else tn++; } });
       counts($("co-counts"), tp, fn, fp, tn);
+      setText("co-eq-tp", tp); setText("co-eq-tp2", tp); setText("co-eq-fn", fn); setText("co-eq-sens", pct(tp / (tp + fn)));
+      setText("co-eq-tn", tn); setText("co-eq-tn2", tn); setText("co-eq-fp", fp); setText("co-eq-spec", pct(tn / (tn + fp)));
       note.textContent = "Sensitivity " + pct(tp / (tp + fn)) + ": caught " + tp + " of the " + (tp + fn) + " women with diabetes. Specificity " + pct(tn / (tn + fp)) + ": cleared " + tn + " of the " + (tn + fp) + " without. Accuracy " + pct((tp + tn) / D.held.length) + ".";
     }
     cut.addEventListener("input", update);
@@ -418,6 +442,7 @@
       var clip = el("clipPath", { id: "un-clip" }, el("defs", {}, svg));
       el("rect", { x: m.l, y: m.t, width: W - m.l - m.r, height: H - m.t - m.b }, clip);
       G.edge = el("line", { style: "stroke:var(--ink)", "stroke-width": 2, "stroke-dasharray": "5 4", "clip-path": "url(#un-clip)" }, svg);
+      markA(svg, X(D.g[A]), Y(D.b[A]));
       [60, 100, 140, 180].forEach(function (g) { text(svg, X(g), H - m.b + 15, String(g), { "text-anchor": "middle", "font-size": 12, style: "fill:var(--muted)" }); });
       [20, 30, 40, 50].forEach(function (b) { text(svg, m.l - 6, Y(b) + 4, String(b), { "text-anchor": "end", "font-size": 12, style: "fill:var(--muted)" }); });
       text(svg, (m.l + W - m.r) / 2, H - 4, "glucose, mg/dL", { "text-anchor": "middle", "font-size": 13, style: "fill:var(--ink-2)" });
@@ -446,6 +471,9 @@
         G.edge.setAttribute("x2", G.X(pts[1][0])); G.edge.setAttribute("y2", G.Y(pts[1][1]));
         G.edge.style.display = "";
       } else G.edge.style.display = "none";
+      var sum = out(D.g[A], D.b[A]);
+      setText("un-eq-wg", wg.toFixed(1)); setText("un-eq-wb", wb.toFixed(1)); setText("un-eq-b", (c < 0 ? "−" : "") + Math.abs(c).toFixed(1));
+      setText("un-eq-out", Math.max(0, sum).toFixed(2));
       var on = D.train.filter(function (i) { return out(D.g[i], D.b[i]) > 0; }), pos = on.filter(function (i) { return D.y[i]; }).length;
       note.textContent = on.length ? "The unit is active for " + on.length + " of the " + D.train.length + " training women, and " + pct(pos / on.length) + " of them had diabetes, against 34.9% overall."
         : "The unit is never active on these women, so its output is always zero.";
@@ -563,6 +591,7 @@
       G.dt.setAttribute("cx", x); G.dt.setAttribute("cy", G.Y(C.train[j]));
       G.dh.setAttribute("cx", x); G.dh.setAttribute("cy", G.Y(C.held[j]));
       var per = Math.round(D.train.length / C.leaves[j]);
+      setText("dp-eq-tr", pct(C.train[j])); setText("dp-eq-he", pct(C.held[j])); setText("dp-eq-gap", (100 * (C.train[j] - C.held[j])).toFixed(1));
       note.textContent = (j === N - 1 ? "With no depth limit" : "At depth " + (j + 1)) + ", training accuracy is " + pct(C.train[j]) + " and held-out accuracy " + pct(C.held[j]) +
         ". The tree has about " + C.leaves[j] + " leaves for the " + D.train.length + " training women, about " + per + " per leaf.";
     }
@@ -578,46 +607,130 @@
     window.addEventListener("resize", debounce(function () { if (width(svg) !== W) build(); }));
   }
 
-  // ---------- 8. the layout of the deployed network ----------
+  // ---------- 8. one prediction through the deployed network ----------
 
-  function network() {
-    var svg = $("nt-svg"), W = 0;
+  // Three held-out women: A had diabetes and is caught, B had none and is cleared, C had diabetes and is missed.
+  var WOMEN = [[A, "Woman A"], [30, "Woman B"], [23, "Woman C"]];
+
+  function network(D) {
+    var svg = $("nt-svg"), note = $("nt-note"), W = 0, G = null, M = null, R = null, U = null, who = 0, p = 0, raf = 0, seen = false;
+    var ORDER = ["Glucose", "BMI", "BloodPressure", "SkinThickness", "Insulin", "DiabetesPedigreeFunction", "Age", "Pregnancies"];
+    var LAB = { Glucose: "glucose", BMI: "BMI", BloodPressure: "blood pressure", SkinThickness: "skin fold", Insulin: "insulin", DiabetesPedigreeFunction: "pedigree", Age: "age", Pregnancies: "pregnancies" };
+    if (typeof DiabetesNet === "undefined") return;
+    chips($("nt-views"), WOMEN.map(function (w) { return w[1]; }), 0, function (i) { who = i; go(true); });
+    $("nt-run").addEventListener("click", function () { go(true); });
+    function input(i) { var v = {}; D.features.forEach(function (f, j) { v[f] = D.X[i][j]; }); return v; }
+    function fmt(v) { return v === Math.round(v) ? String(v) : String(Math.round(v * 1000) / 1000); }
+    // Run the network on all 768 women once. Draw the units that switch on for about half of the women,
+    // so a drawn layer looks like the whole layer, and scale a unit's fill by its largest output.
+    function prep() {
+      var runs = D.X.map(function (r, i) { return DiabetesNet.run(M, input(i)); });
+      function pick(key, n) {
+        var u = [];
+        for (var j = 0; j < runs[0][key].length; j++) {
+          var on = 0, mx = 0;
+          runs.forEach(function (r) { var v = r[key][j]; if (v > 0) on++; if (v > mx) mx = v; });
+          var rate = on / runs.length; u.push([j, rate * (1 - rate), mx]);
+        }
+        return u.sort(function (a, b) { return b[1] - a[1]; }).slice(0, n).sort(function (a, b) { return a[0] - b[0]; });
+      }
+      U = { h1: pick("h1", 10), h2: pick("h2", 8) };
+    }
     function build() {
       clear(svg);
       W = width(svg);
-      var narrow = W < 560, H = narrow ? 290 : 320, top = 40, bot = narrow ? 34 : 30;
-      var names = ["glucose", "BMI", narrow ? "blood pr." : "blood pressure", "skin fold", "insulin", "pedigree", "age", "pregnancies"];
-      var lab = narrow ? 76 : 108, right = narrow ? 64 : 92, x0 = lab + 6, s = (W - right - x0) / 3;
-      var shown = [8, 10, 7, 1], xs = [x0, x0 + s, x0 + 2 * s, x0 + 3 * s];
-      var heads = narrow ? ["inputs", "layer 1", "layer 2", "score"] : ["8 inputs", "layer 1, 200 units", "layer 2, 100 units", "score"];
-      var ys = shown.map(function (n) {
-        var span = Math.min(H - top - bot, (n - 1) * 30), y0 = top + (H - top - bot - span) / 2;
-        var a = []; for (var i = 0; i < n; i++) a.push(n === 1 ? top + (H - top - bot) / 2 : y0 + span * i / (n - 1));
+      var narrow = W < 560, H = narrow ? 330 : 360, top = 36, bot = 50;
+      var lab = narrow ? 112 : 168, right = narrow ? 58 : 130, x0 = lab + 8, s = (W - right - x0) / 3;
+      var xs = [x0, x0 + s, x0 + 2 * s, x0 + 3 * s], n = [8, U.h1.length, U.h2.length, 1];
+      var ys = n.map(function (k) {
+        var span = Math.min(H - top - bot, (k - 1) * 32), y0 = top + (H - top - bot - span) / 2, a = [];
+        for (var i = 0; i < k; i++) a.push(k === 1 ? top + (H - top - bot) / 2 : y0 + span * i / (k - 1));
         return a;
       });
-      for (var c = 0; c < 3; c++) {
-        var g = el("g", { "class": "wire wire-" + (c + 1) }, svg);
-        ys[c].forEach(function (ya) { ys[c + 1].forEach(function (yb) { el("line", { x1: xs[c], y1: ya, x2: xs[c + 1], y2: yb }, g); }); });
-      }
-      ys.forEach(function (col, c) {
-        text(svg, xs[c], 16, heads[c], { "text-anchor": "middle", "font-size": 13, "font-weight": 600, style: "fill:var(--ink)" });
-        col.forEach(function (y, i) {
-          if (c === 0 && i >= 6) el("rect", { x: xs[c] - 6, y: y - 6, width: 12, height: 12, rx: 2, style: "fill:var(--sand);stroke:var(--paper)", "stroke-width": 1.5 }, svg);
-          else el("circle", { cx: xs[c], cy: y, r: c === 3 ? 9 : 6, "class": "node node-" + c, style: "fill:var(--" + (c === 0 ? "navy" : c === 3 ? "coral" : "teal") + ");stroke:var(--paper)", "stroke-width": 1.5 }, svg);
-          if (c === 0) text(svg, lab - 4, y + 4, names[i], { "text-anchor": "end", "font-size": 12.5, style: "fill:var(--ink-2)" });
-        });
-        if (c === 1 || c === 2) text(svg, xs[c], H - bot + 18, narrow ? (c === 1 ? "200 units" : "100 units") : "only some units drawn", { "text-anchor": "middle", "font-size": 12, style: "fill:var(--muted)" });
+      G = { nodes: [[], [], [], []], wires: [[], [], []], names: [] };
+      for (var c = 0; c < 3; c++) ys[c].forEach(function (ya, a) {
+        ys[c + 1].forEach(function (yb) { G.wires[c].push([el("line", { x1: xs[c], y1: ya, x2: xs[c + 1], y2: yb, "stroke-width": 1.2 }, svg), a]); });
       });
-      text(svg, xs[3] + 14, ys[3][0] + 4, narrow ? "0 to 1.2" : "from 0 to 1.2", { "font-size": 12.5, style: "fill:var(--ink-2)" });
-      text(svg, 2, H - bot + 18, narrow ? "squares: embeddings" : "squares: categories, read through embeddings", { "font-size": 12, style: "fill:var(--muted)" });
+      (narrow ? ["inputs", "layer 1", "layer 2", "score"] : ["8 inputs", "layer 1", "layer 2", "score"]).forEach(function (h, c) {
+        text(svg, xs[c], 16, h, { "text-anchor": "middle", "font-size": 13, "font-weight": 600, style: "fill:var(--ink)" });
+      });
+      ORDER.forEach(function (f, i) {
+        var y = ys[0][i];
+        G.nodes[0].push(i >= 6 ? el("rect", { x: xs[0] - 7, y: y - 7, width: 14, height: 14, rx: 2 }, svg) : el("circle", { cx: xs[0], cy: y, r: 7 }, svg));
+        G.names.push(text(svg, lab - 4, y + 4, "", { "text-anchor": "end", "font-size": 12.5, style: "fill:var(--ink-2)" }));
+      });
+      [1, 2].forEach(function (c) { ys[c].forEach(function (y) { G.nodes[c].push(el("circle", { cx: xs[c], cy: y, r: 8 }, svg)); }); });
+      G.nodes[3].push(el("circle", { cx: xs[3], cy: ys[3][0], r: 13 }, svg));
+      G.on = [1, 2].map(function (c) { return text(svg, xs[c], H - bot + 22 + (narrow && c === 2 ? 17 : 0), "", { "text-anchor": "middle", "font-size": 12.5, style: "fill:var(--ink-2)" }); });
+      G.drawn = [1, 2].map(function (c) { return text(svg, xs[c], H - bot + 38, narrow ? "" : (c === 1 ? "showing 10 of 200" : "showing 8 of 100"), { "text-anchor": "middle", "font-size": 11.5, style: "fill:var(--muted)" }); });
+      G.score = text(svg, xs[3] + (narrow ? 0 : 20), ys[3][0] + (narrow ? 34 : 6), "", { "text-anchor": narrow ? "middle" : "start", "font-size": 17, "font-weight": 600, style: "fill:var(--ink)" });
+      G.call = text(svg, xs[3] + (narrow ? 0 : 20), ys[3][0] + (narrow ? 50 : 24), "", { "text-anchor": narrow ? "middle" : "start", "font-size": 12, style: "fill:var(--ink-2)" });
       svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+      paint();
     }
-    // The wires light up layer by layer, once when the figure comes into view and again on request.
-    function run() { svg.classList.remove("go"); void svg.getBoundingClientRect(); svg.classList.add("go"); }
-    $("nt-run").addEventListener("click", run);
-    if ("IntersectionObserver" in window) new IntersectionObserver(function (es, io) { if (es[0].isIntersecting) { run(); io.disconnect(); } }, { threshold: 0.5 }).observe(svg);
-    build();
-    window.addEventListener("resize", debounce(function () { if (width(svg) !== W) build(); }));
+    // p runs from 0 to 1: inputs light up, then layer 1, layer 2 and the score in turn.
+    function stage(a, b) { return Math.max(0, Math.min(1, (p - a) / (b - a))); }
+    function paint() {
+      if (!G || !R) return;
+      var q = [stage(0, 0.12), stage(0.12, 0.42), stage(0.42, 0.72), stage(0.72, 1)], v = input(WOMEN[who][0]);
+      var act = [ORDER.map(function () { return 1; }), U.h1.map(function (u) { return R.h1[u[0]] / u[2]; }), U.h2.map(function (u) { return R.h2[u[0]] / u[2]; }), [1]];
+      ORDER.forEach(function (f, i) { G.names[i].textContent = LAB[f] + " " + fmt(v[f]); });
+      G.nodes.forEach(function (col, c) {
+        col.forEach(function (nd, i) {
+          var a = Math.min(1, act[c][i]);
+          if (c === 0) nd.setAttribute("style", "fill:var(--" + (i >= 6 ? "sand" : "navy") + ");fill-opacity:" + (0.2 + 0.8 * q[0]).toFixed(2));
+          else if (c === 3) nd.setAttribute("style", "fill:var(--coral);fill-opacity:" + (0.12 + 0.88 * q[3]).toFixed(2) + ";stroke:var(--coral)");
+          else if (a > 0) nd.setAttribute("style", "fill:var(--teal);fill-opacity:" + (q[c] * (0.3 + 0.7 * a)).toFixed(2) + ";stroke:var(--teal);stroke-width:1.5;stroke-opacity:" + (0.35 + 0.65 * q[c]).toFixed(2));
+          else nd.setAttribute("style", "fill:var(--paper);stroke:var(--muted);stroke-width:1.5;stroke-opacity:0.6");
+        });
+      });
+      G.wires.forEach(function (ws, c) {
+        var t = q[c + 1], pulse = Math.sin(Math.PI * t);
+        ws.forEach(function (w) {
+          var live = c === 0 || act[c][w[1]] > 0;
+          w[0].setAttribute("style", live ? "stroke:var(--teal);stroke-opacity:" + (0.08 + 0.55 * pulse + 0.12 * t).toFixed(2) : "stroke:var(--muted);stroke-opacity:0.07");
+        });
+      });
+      var on1 = R.h1.filter(function (x) { return x > 0; }).length, on2 = R.h2.filter(function (x) { return x > 0; }).length;
+      G.on[0].textContent = q[1] > 0 ? on1 + " of 200 on" : "200 units";
+      G.on[1].textContent = q[2] > 0 ? on2 + " of 100 on" : "100 units";
+      G.score.textContent = q[3] > 0 ? (R.score * q[3]).toFixed(3) : "";
+      G.call.textContent = q[3] >= 1 ? (R.score > 0.5 ? "above 0.5: yes" : "below 0.5: no") : "";
+    }
+    function story() {
+      var i = WOMEN[who][0], y = D.y[i], s = R.score, call = s > 0.5;
+      var on1 = R.h1.filter(function (x) { return x > 0; }).length, on2 = R.h2.filter(function (x) { return x > 0; }).length;
+      note.textContent = WOMEN[who][1] + (y ? " had diabetes." : " did not have diabetes.") + " The network gives her " + s.toFixed(3) + ", " + (call ? "above" : "below") + " the 0.5 cut-off, so it " +
+        (call === Boolean(y) ? (call ? "catches her." : "clears her.") : (call ? "raises a false alarm." : "misses her.")) + " ReLU switched on " + on1 + " of the 200 units in layer 1 and " + on2 + " of the 100 in layer 2.";
+      setText("nt-eq-z", R.logit.toFixed(2)); setText("nt-eq-score", s.toFixed(3));
+      setText("nt-eq-s2", s.toFixed(3)); setText("nt-eq-y", y); setText("nt-eq-err", Math.pow(s - y, 2).toFixed(3));
+    }
+    // Played on request even with reduced motion; it starts by itself only when motion is welcome.
+    function go(animate) {
+      if (!M) return;
+      seen = true;
+      R = DiabetesNet.run(M, input(WOMEN[who][0]));
+      story();
+      cancelAnimationFrame(raf);
+      if (!animate) { p = 1; paint(); return; }
+      var t0 = 0;
+      raf = requestAnimationFrame(function f(ts) {
+        if (!t0) t0 = ts;
+        p = Math.min(1, (ts - t0) / 2800);
+        paint();
+        if (p < 1) raf = requestAnimationFrame(f);
+      });
+    }
+    fetch("../model.json?v=5").then(function (r) { return r.json(); }).then(function (m) {
+      M = m; prep();
+      R = DiabetesNet.run(M, input(WOMEN[who][0]));
+      story(); p = reduce ? 1 : 0; build();
+      if ("IntersectionObserver" in window && !reduce) new IntersectionObserver(function (es, io) {
+        if (es[0].isIntersecting && !seen) { seen = true; go(true); io.disconnect(); }
+      }, { threshold: 0.45 }).observe(svg);
+      else p = 1, paint();
+    });
+    window.addEventListener("resize", debounce(function () { if (G && width(svg) !== W) build(); }));
   }
 
   // ---------- 10. split counts against the shuffle test ----------

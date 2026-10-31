@@ -65,6 +65,19 @@ ul.plain li { margin: 4px 0; }
 .recall details p { margin: 10px 14px 12px; color: var(--ink-2); }
 .recall summary a { font-weight: 600; }
 
+/* Illustrated equations: a value in a box, with its meaning underneath. Coloured boxes match the figure. */
+.eqn { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px 6px; max-width: 46em; margin: 6px 0 16px; }
+.eqn .t { display: inline-flex; flex-direction: column; align-items: center; min-width: 2.6em; padding: 4px 10px 4px; border: 1.5px solid var(--rule); border-radius: 7px; background: var(--bg); }
+.eqn .t b { font-size: 19px; font-weight: 600; line-height: 1.3; color: var(--ink); white-space: nowrap; font-feature-settings: "tnum" 1, "lnum" 1; }
+.eqn .t i { font-style: normal; font-size: 12.5px; line-height: 1.25; color: var(--muted); text-align: center; max-width: 11em; }
+.eqn .t i:empty { display: none; }
+.eqn .op { padding: 5px 1px 0; font-size: 20px; line-height: 1.3; color: var(--ink-2); white-space: nowrap; }
+.eqn sup { font-size: 0.7em; line-height: 0; }
+.eqn .c-coral { border-color: var(--coral); } .eqn .c-coral b { color: var(--coral); }
+.eqn .c-navy { border-color: var(--navy); } .eqn .c-navy b { color: var(--navy); }
+.eqn .c-teal { border-color: var(--teal); } .eqn .c-teal b { color: var(--link-hover); }
+.eqn .c-sand { border-color: var(--sand); } .eqn .c-sand b { color: var(--sand); }
+
 /* Warm-up quiz, asked again at the end. */
 .quiz { max-width: 46em; }
 .quiz fieldset { margin: 0 0 12px; padding: 10px 14px 8px; border: 1px solid var(--rule); border-radius: 6px; background: var(--paper); }
@@ -90,13 +103,7 @@ ul.plain li { margin: 4px 0; }
 .rd-list .res.no { color: var(--coral); font-weight: 600; }
 .redraw .bar .status { margin: 0 0 0 10px; }
 
-/* The network figure: wires light up from left to right when the figure comes into view. */
-#nt-svg .wire line { stroke: var(--muted); stroke-opacity: 0.18; stroke-width: 0.8; }
-#nt-svg.go .wire line { animation: nt-wire 1.1s ease both; }
-#nt-svg.go .wire-2 line { animation-delay: 0.7s; }
-#nt-svg.go .wire-3 line { animation-delay: 1.4s; }
-@keyframes nt-wire { 0% { stroke-opacity: 0.18; } 45% { stroke: var(--teal); stroke-opacity: 0.75; stroke-width: 1.2; } 100% { stroke-opacity: 0.18; } }
-@media (prefers-reduced-motion: reduce) { #nt-svg.go .wire line { animation: none; stroke: var(--teal); stroke-opacity: 0.35; } }
+/* The network figure is painted from script, frame by frame, so it plays on request even with reduced motion. */
 
 @media (max-width: 760px) {
   .toc ol { columns: 1; }
