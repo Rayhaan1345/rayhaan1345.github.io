@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rebuilt Optimizer State | Rayhaan Khan</title>
+<meta name="description" content="Public language-model checkpoints leave out the AdamW state that trained them. About 200 short steps on public data rebuild it, which removes the early loss jump of a cold start and reduces forgetting in continued pre-training.">
+<meta name="author" content="Rayhaan Khan">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Stable Continual Pre-training from Weights-Only Checkpoints via Rebuilt Optimizer State">
+<meta property="og:description" content="Rebuilding the AdamW state that public checkpoints leave out.">
+<meta property="og:url" content="https://rayhaan1345.github.io/projects/optimizer-state/">
+<meta property="og:image" content="https://rayhaan1345.github.io/projects/optimizer-state/img/overview.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="../../favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;1,400&family=Spectral+SC:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../assets/site.css">
+<link rel="stylesheet" href="../../assets/project.css">
+<script>try{var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+</head>
+<body>
+<main class="proj">
+
+<p class="crumbs"><a href="../../">Rayhaan Khan</a> &middot; <a href="../../#research">Research</a></p>
+
+<header class="hero">
+  <h1>Stable Continual Pre-training from Weights-Only Checkpoints via Rebuilt Optimizer State</h1>
+  <p class="subtitle">Rebuilding the AdamW state that public checkpoints leave out</p>
+  <p class="byline"><strong>Rayhaan Khan</strong>, Shadab Khan</p>
+  <p class="context">Under review at Transactions on Machine Learning Research (TMLR) &middot; research internship at ADIA Lab, April 2025 to June 2026</p>
+  <ul class="pills">
+    <li><a href="https://drive.google.com/file/d/1VI6MjFcu0oSlswk5wuyVrYFZPcKXPKhP/view">Manuscript and supplement (PDF)</a></li>
+    <li><a href="#cite">Cite</a></li>
+  </ul>
+</header>
+
+<div class="tldr">
+  <p>Public language models are released as weights. The AdamW optimizer that trained them also kept two running averages per weight, a first moment <i>m</i> and a second moment <i>v</i>, and releases leave both out. Continued pre-training on new data therefore starts AdamW from zero. Its first steps are full-sized in all directions, the training loss jumps, and the model forgets part of what it knew.</p>
+  <p>We show that about 200 AdamW steps on public text, at a learning rate too small to move the weights, rebuild the useful part of that state. Warm-starting from it removes the early jump. Using the rebuilt <i>v</i> as an elastic weight consolidation (EWC) anchor reduces forgetting. At 7B parameters, where the original buffers are public, the rebuilt estimate protects the model better than the original.</p>
+</div>
+
+<div class="stats" role="list">
+  <div role="listitem"><b>&asymp; 200</b><span>AdamW steps on public text rebuild the state, with no access to the training data</span></div>
+  <div role="listitem"><b class="teal">&asymp; 3&times;</b><span>less forgetting than a cold start at the same target loss, Pythia 1B</span></div>
+  <div role="listitem"><b>0.4 &rarr; 0.09</b><span>nats above the checkpoint's loss early in fine-tuning at LLaMA-3 8B, cold start against rebuilt state</span></div>
+  <div role="listitem"><b class="coral">5&times;</b><span>larger downloads if releases shipped AdamW's state in fp32</span></div>
+</div>
+
+<section id="dropped" aria-labelledby="dropped-h">
+  <h2 id="dropped-h">What a checkpoint leaves out</h2>
+  <p>In bf16 a weight takes 2 bytes. AdamW keeps <i>m</i> and <i>v</i> in fp32, which adds 8 bytes per parameter. Shipping the optimizer state would make a download about five times larger. Releases drop it. Among the model families tested here, only OLMo-2 publishes its AdamW buffers.</p>
+  <div class="card" id="sizes">
+    <div class="bar">
+      <div class="group" role="group" aria-label="Model" id="sz-models"></div>
+    </div>
+    <svg id="sz-svg" role="img" aria-label="Download size with and without the optimizer state"></svg>
+  </div>
+  <p class="cap"><b>Download size.</b> Two bytes per weight and eight bytes per parameter for <i>m</i> and <i>v</i>, as in the manuscript; parameter counts are rounded.</p>
+</section>
+
+<section id="toy" aria-labelledby="toy-h">
+  <h2 id="toy-h">Two jobs for the rebuilt state</h2>
+  <p>With <i>m</i> = <i>v</i> = 0, the first bias-corrected AdamW step is <span class="eq">&minus;lr &middot; sign(g)</span>: all parameters move by the full learning rate, whatever the curvature. For about 1/(1 &minus; &beta;<sub>2</sub>) steps after that, step sizes stay mis-scaled. A rebuilt state fixes the start. Its second moment also estimates how much the old task depends on a parameter, which is what an anchor against forgetting needs. The toy below shows the two jobs on a two-parameter model.</p>
+  <div class="card" id="play">
+    <div class="bar">
+      <div class="group" role="group" aria-label="What to show">
+        <button type="button" data-tmode="jump" aria-pressed="true">the early jump</button>
+        <button type="button" data-tmode="forget" aria-pressed="false">forgetting</button>
+      </div>
+      <div class="group" role="group" aria-label="Learning rate" id="tp-rates">
+        <button type="button" data-rate="lo" aria-pressed="false">lower rate</button>
+        <button type="button" data-rate="hi" aria-pressed="true">higher rate</button>
+      </div>
+      <button type="button" class="btn" id="tp-replay">Replay</button>
+    </div>
+    <svg id="tp-svg" role="img" aria-label="Toy optimization paths and loss curves"></svg>
+    <p class="status" id="tp-note" aria-live="polite"></p>
+  </div>
+  <p class="cap"><b>A toy with made-up numbers.</b> All runs fine-tune with Adam and noisy gradients from the same checkpoint (ring). The rebuilt state comes from 200 tiny steps at the checkpoint on the old task's data. In <b>the early jump</b>, the checkpoint lies on the floor of a narrow valley of the new task, and the cold start's first step crosses it. In <b>forgetting</b>, the sand contours show the old task's loss. The anchor penalises moves in proportion to the rebuilt <i>v</i>, so the run learns along directions the old task barely notices.</p>
+</section>
+
+<section id="rebuild" aria-labelledby="rebuild-h">
+  <h2 id="rebuild-h">How the state is rebuilt</h2>
+  <p>The recovery needs only the released checkpoint and public text. It takes about 210 forward and backward passes in two short runs, and the weights barely move during either.</p>
+  <div class="card" id="steps">
+    <div class="steps-tabs" role="tablist" aria-label="Recovery steps">
+      <button type="button" role="tab" aria-selected="true" data-step="0">1. Start from zero</button>
+      <button type="button" role="tab" aria-selected="false" data-step="1">2. Run 200 tiny steps</button>
+      <button type="button" role="tab" aria-selected="false" data-step="2">3. Use the state twice</button>
+    </div>
+    <div class="step-text" id="st-text" aria-live="polite"></div>
+    <svg id="st-svg" role="img" aria-label="Diagram of the recovery step"></svg>
+    <div class="step-nav">
+      <button type="button" class="btn" id="st-prev">&lsaquo; Previous</button>
+      <div class="dots" aria-hidden="true"><span></span><span></span><span></span></div>
+      <button type="button" class="btn" id="st-next">Next &rsaquo;</button>
+    </div>
+  </div>
+  <p class="cap"><b>Recovery settings.</b> The recovery run takes 200 steps at a learning rate of 10<sup>&minus;7</sup> with weight decay off. This count makes the bias correction 1 &minus; &beta;<sub>2</sub><sup>200</sup> close to 1 for &beta;<sub>2</sub> = 0.95. The run must use the model's own training-time &beta;<sub>2</sub>, &epsilon; and weight decay; a wrong &epsilon; corrupts <i>v</i> without any error showing. The grids are a schematic.</p>
+</section>
+
+<section id="truth" aria-labelledby="truth-h">
+  <h2 id="truth-h">Checking against the true state</h2>
+  <p>Only two settings allow a check against the true optimizer state: a GPT-2 we trained from scratch with its buffers saved, and OLMo-2-7B, whose buffers are public. The test is functional. Both anchors protect the same fine-tuning run, and the measure is forgetting, the rise in loss on the old data.</p>
+  <div class="card" id="check">
+    <div class="bar">
+      <div class="group" role="group" aria-label="Setting">
+        <button type="button" data-chk="gpt2" aria-pressed="true">GPT-2, 124M</button>
+        <button type="button" data-chk="olmo5" aria-pressed="false">OLMo-2 7B, 5M tokens</button>
+        <button type="button" data-chk="olmo50" aria-pressed="false">OLMo-2 7B, 50M tokens</button>
+      </div>
+    </div>
+    <svg id="ck-svg" role="img" aria-label="Forgetting with the rebuilt and the true optimizer state"></svg>
+    <p class="status" id="ck-note" aria-live="polite"></p>
+  </div>
+  <p class="cap"><b>Forgetting</b> is post-fine-tuning minus pre-fine-tuning loss on the source data, in nats, with seed standard deviations where the manuscript reports them. The rebuilt <i>v</i> is 18 times larger than the true one at GPT-2 and 3 times smaller at OLMo-2, so a fair comparison first equalises the penalty strength. On GPT-2 the rebuilt <i>v</i> reaches a cosine similarity of 0.86 to 0.87 with the true buffer.</p>
+</section>
+
+<section id="results" aria-labelledby="results-h">
+  <h2 id="results-h">Results at four scales</h2>
+  <p>Five fine-tuning conditions load different parts of the rebuilt state. They are <b>cold</b> (no rebuilt state), <b>warm</b> (<i>m</i> and <i>v</i>, no anchor), <b>ewc</b> (the anchor alone), <b>v_only</b> (<i>v</i> and the anchor) and <b>full</b> (warm start plus anchor). The anchor accounts for the forgetting result. The warm start matters most at the start of a run at a high learning rate.</p>
+  <div class="card" id="explorer">
+    <div class="bar">
+      <div class="group" role="group" aria-label="View">
+        <button type="button" data-xview="table" aria-pressed="true">five conditions</button>
+        <button type="button" data-xview="sweep" aria-pressed="false">penalty strength</button>
+      </div>
+      <div class="group" role="group" aria-label="Model" id="xr-scales"></div>
+      <div class="group" role="group" aria-label="Measure" id="xr-metrics">
+        <button type="button" data-metric="f" aria-pressed="true">forgetting</button>
+        <button type="button" data-metric="t" aria-pressed="false">target loss</button>
+        <button type="button" data-metric="b" aria-pressed="false">benchmarks</button>
+      </div>
+    </div>
+    <svg id="xr-svg" role="img" aria-label="Results chart"></svg>
+    <p class="status" id="xr-note" aria-live="polite"></p>
+  </div>
+  <p class="cap"><b>Five conditions</b>: the higher-rate stress test of the manuscript, at learning rate 10<sup>&minus;4</sup> on clinical text (HC4) for 5M tokens with &lambda; = 10<sup>6</sup>, three seeds, mean and standard deviation. <b>Benchmarks</b> is the mean accuracy change over eight lm-evaluation-harness tasks, in points; the suite is near chance at 124M. At this budget a cold start at a lower learning rate beats all of these runs. The grid is a stress test at a rate that is too high for the budget. <b>Penalty strength</b>: the anchor alone at strengths from 10<sup>4</sup> to 3 &times; 10<sup>7</sup>; lower left is better, and the best strength grows with model size.</p>
+</section>
+
+<section id="structure" aria-labelledby="structure-h">
+  <h2 id="structure-h">Is the per-parameter structure doing the work?</h2>
+  <p>An anchor could help only because it pulls weights back toward the checkpoint with the right overall strength. Four controls keep the strength and destroy the per-parameter pattern of the rebuilt <i>v</i>. They use a uniform value, a random permutation across all parameters, a permutation within tensors, and tensor means. All five runs reach nearly the same target loss.</p>
+  <div class="card" id="nulls"><svg id="nl-svg" role="img" aria-label="Forgetting for the rebuilt anchor and four controls"></svg></div>
+  <p class="cap"><b>Pythia 1B</b>, learning rate 10<sup>&minus;5</sup>, 100M tokens, three seeds; target losses span 2.445 to 2.455. The rebuilt <i>v</i> forgets about 2.3 times less than the uniform anchor. The controls that keep per-tensor scale forget as much as the global ones, so the useful signal lies in individual parameters.</p>
+</section>
+
+<section id="figures" aria-labelledby="figures-h">
+  <h2 id="figures-h">Figures from the manuscript</h2>
+  <div class="plates">
+    <div class="plate"><figure><div class="frame"><img src="img/early-steps.png" alt="Training loss over the first fine-tuning steps at four model scales for cold start, warm start and the full recipe." width="1800" height="501" loading="lazy"></div>
+      <figcaption class="cap"><b>The early jump at four scales.</b> Training loss over the first fine-tuning steps at learning rate 10<sup>&minus;4</sup>. The cold start (sand) climbs furthest above the checkpoint's own loss (dashed). At LLaMA-3 8B the cold start reaches 2.39 nats at step 4 and the warm start 2.07, against a checkpoint loss of 1.98.</figcaption></figure></div>
+    <div class="plate"><figure><div class="frame"><img src="img/frontier.png" alt="Forgetting against target loss for cold starts at several learning rates and for the full recipe, at Pythia 1B, Qwen2.5-3B and LLaMA-3 8B." width="1800" height="464" loading="lazy"></div>
+      <figcaption class="cap"><b>Learning against forgetting.</b> Cold starts at a range of learning rates (sand line) against the full recipe (teal), at conservative rates and 100M tokens. Points below the sand line forget less for the same learning. At 1B, a cold start at a matched target forgets 1.5 to 3.4 times more.</figcaption></figure></div>
+    <div class="plate"><figure><div class="frame"><img src="img/long-horizon.png" alt="Target and source loss over 200M tokens of fine-tuning for Pythia 1B and Qwen2.5-3B." width="1600" height="1005" loading="lazy"></div>
+      <figcaption class="cap"><b>A longer run.</b> Target loss (left) and source loss (right) over 200M tokens at learning rate 10<sup>&minus;5</sup>. All conditions learn the target alike. Cold and warm drift up on the source data, while the full recipe stays near the checkpoint's level.</figcaption></figure></div>
+    <div class="plate"><figure><div class="frame"><img src="img/overview.png" alt="Method overview: a public checkpoint, about 200 low-rate AdamW steps, the recovered state, and its two uses." width="1005" height="474" loading="lazy" style="max-width:640px;margin:0 auto"></div>
+      <figcaption class="cap"><b>Method.</b> Figure 1 of the manuscript.</figcaption></figure></div>
+  </div>
+</section>
+
+<section id="mine" aria-labelledby="mine-h">
+  <h2 id="mine-h">My part</h2>
+  <p>I started the project on small models, first an MLP on MNIST and then a ResNet-18 on CIFAR-10. I built a pipeline for both SGD with momentum and AdamW. It saves a model's optimizer buffers during training and continues training from the saved weights alone with a fresh optimizer. It then compares the new buffers with the saved ones, layer by layer. The manuscript's GPT-2 experiment uses the same design at language-model scale: train with the optimizer state saved, rebuild it, and compare.</p>
+  <div class="card">
+    <ol class="flow" aria-label="The pipeline">
+      <li><b>Train</b><span>ResNet-18 on CIFAR-10, logging loss and accuracy</span></li>
+      <li><b>Save</b><span>the weights and the optimizer buffers</span></li>
+      <li><b>Continue</b><span>from the weights alone, with a fresh optimizer</span></li>
+      <li><b>Compare</b><span>new and saved buffers, layer by layer</span></li>
+    </ol>
+  </div>
+</section>
+
+<section id="limits" aria-labelledby="limits-h">
+  <h2 id="limits-h">Limits and next steps</h2>
+  <p>Recovery applies to AdamW only. From 1B to 8B parameters, forgetting is measured on FineWeb as a proxy for the original training data; GPT-2's held-out OpenWebText is the cleanest case. Fine-tuning budgets span 5M to 250M tokens, and the study covers four decoder-only model families. At 124M parameters the protection fades by 250M tokens.</p>
+  <p>The open question is why the fresh estimate protects better than OLMo-2's own buffer. Recovery on OLMo-2's public training mix could separate a stale buffer from the effects of the estimator.</p>
+</section>
+
+<section id="cite" aria-labelledby="cite-h">
+  <h2 id="cite-h">Citation</h2>
+  <div class="bib">
+    <button type="button" class="btn" id="bib-copy">Copy</button>
+<pre id="bib-text">R. Khan and S. Khan. Stable Continual Pre-training from Weights-Only
+Checkpoints via Rebuilt Optimizer State. Under review at Transactions
+on Machine Learning Research, 2026.</pre>
+  </div>
+</section>
+
+<footer>
+  <span><a href="../../">&larr; Rayhaan Khan</a> &middot; <a class="mail mail-sm" href="#cite" data-n="yar" data-d="ni.baliam" aria-label="Email Rayhaan" title="Write an email"><span class="mail-art"><img src="../../assets/img/email.png" alt="" width="1008" height="124"></span></a></span>
+  <span><button type="button" class="theme-toggle" id="theme-toggle">dark mode</button></span>
+</footer>
+
+</main>
+<script src="../../assets/site.js" defer></script>
+<script src="opt.js" defer></script>
+</body>
+</html>

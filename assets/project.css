@@ -195,3 +195,15 @@
   .share .fill { transition: none; }
   .replay .caret { animation: none; }
 }
+
+/* pipeline steps, as on the optimizer-state page */
+.flow { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; counter-reset: flow; }
+.flow li { position: relative; background: var(--bg); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; counter-increment: flow; }
+.flow li b { display: block; font-weight: 600; color: var(--ink); }
+.flow li b::before { content: counter(flow) ". "; color: var(--teal); }
+.flow li span { display: block; margin-top: 4px; font-size: 15px; color: var(--ink-2); line-height: 1.4; }
+.flow li + li::before { content: "\2192"; position: absolute; left: -13px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 14px; }
+@media (max-width: 760px) {
+  .flow { grid-template-columns: 1fr; gap: 10px; }
+  .flow li + li::before { content: "\2193"; left: 50%; top: -12px; transform: translateX(-50%); }
+}
