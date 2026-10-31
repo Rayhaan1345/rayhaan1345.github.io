@@ -16,8 +16,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;1,400&family=Spectral+SC:wght@500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../../assets/site.css">
-<link rel="stylesheet" href="../../assets/project.css">
+<link rel="stylesheet" href="../../assets/site.css?v=2">
+<link rel="stylesheet" href="../../assets/project.css?v=2">
 <script>try{var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
 </head>
 <body>
@@ -81,7 +81,7 @@
       <button type="button" class="btn" data-mem="clear">Clear</button>
     </div>
     <svg id="mem-svg" role="img" aria-label="A small matrix memory: writing pattern and target pairs as outer products, and reading them back"></svg>
-    <p class="status" id="mem-note" aria-live="polite">Start by writing pair A.</p>
+    <p class="status" id="mem-note" aria-live="polite">The matrix starts empty. Pattern A and target A are shown on its edges. Press pair A to write them in.</p>
   </div>
   <p class="cap"><b>A small fast-weight memory.</b> Teal cells are positive and coral cells negative. Writing a pair adds the target times the pattern to the matrix, one row per target value. Reading multiplies the matrix by a pattern. The two stored patterns are at right angles, so reading with one returns its own target and leaves the other alone. The numbers are made up, and a layer in the model works with thousands of dimensions.</p>
   <p>In the model, the target comes from the layer's own input: a short causal convolution over recent tokens, passed through a learned projection. No labels are needed, so the model can learn from any text it reads. Whether these notes help is the question of this study. If they do, switching the writing off should cost accuracy.</p>
@@ -267,7 +267,7 @@
 </footer>
 
 </main>
-<script src="../../assets/site.js" defer></script>
-<script src="ttt.js" defer></script>
+<script src="../../assets/site.js?v=2" defer></script>
+<script src="ttt.js?v=2" defer></script>
 </body>
 </html>

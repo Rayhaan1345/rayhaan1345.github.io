@@ -168,6 +168,13 @@
       text(svg, mx, by, "change in the fast weight, W − W", { "font-size": 13, style: "fill:var(--muted)" }).appendChild(sub0());
       svg.setAttribute("viewBox", "0 0 " + W + " " + (by + 10));
       paintMatrix();
+      if (writes.A + writes.B === 0) idle();
+    }
+    // Before the first write, show pair A beside the empty matrix so the parts are visible.
+    function idle() {
+      paintBar(G.key, KEY.A, r8); paintBar(G.val, VAL.A, 1); paintBar(G.out, null);
+      G.keyLabel.textContent = "pattern A";
+      G.valLabel.textContent = "target A";
     }
     function sub0() { var t = document.createElementNS(NS, "tspan"); t.setAttribute("dy", 4); t.setAttribute("font-size", 10); t.textContent = "0"; return t; }
     function paintMatrix() {
@@ -242,7 +249,7 @@
         else if (a === "rA") read("A");
         else if (a === "rA2") read("A2");
         else if (a === "rC") read("C");
-        else { zero(); paintBar(G.key, null); paintBar(G.val, null); paintBar(G.out, null); G.keyLabel.textContent = "pattern"; G.keyFrame.style.strokeOpacity = "0"; paintMatrix(); note.textContent = "Cleared. The fast weight is back to its trained values."; }
+        else { zero(); G.keyFrame.style.strokeOpacity = "0"; paintMatrix(); idle(); note.textContent = "Cleared. The fast weight is back to its trained values. Press pair A to write it."; }
       });
     });
     build();
