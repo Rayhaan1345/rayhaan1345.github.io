@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>In-Place TTT on Qwen3-4B | Rayhaan Khan</title>
+<meta name="description" content="A controlled ablation of In-Place Test-Time Training on Qwen3-4B. Switching the test-time update off changes the RULER mean by at most 0.4 points up to 64k tokens, so the gains come from training with the module.">
+<meta name="author" content="Rayhaan Khan">
+<meta property="og:type" content="article">
+<meta property="og:title" content="In-Place Test-Time Training on Qwen3-4B">
+<meta property="og:description" content="A controlled ablation of the test-time update.">
+<meta property="og:url" content="https://rayhaan1345.github.io/projects/in-place-ttt/">
+<meta property="og:image" content="https://rayhaan1345.github.io/assets/img/ttt-overview.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="../../favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;1,400&family=Spectral+SC:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../assets/site.css">
+<link rel="stylesheet" href="../../assets/project.css">
+<script>try{var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+</head>
+<body>
+<main class="proj">
+
+<p class="crumbs"><a href="../../">Rayhaan Khan</a> &middot; <a href="../../#research">Research</a></p>
+
+<header class="hero">
+  <h1>In-Place Test-Time Training on Qwen3-4B</h1>
+  <p class="subtitle">A controlled ablation of the test-time update</p>
+  <p class="byline"><strong>Rayhaan Khan</strong> &middot; Mumbai AI Lab</p>
+  <p class="context">Interim report from a research internship at MBZUAI with Dr Salman Khan and Hanoona Rasheed</p>
+  <ul class="pills">
+    <li><a href="https://github.com/Rayhaan1345/inplace-ttt-study/blob/main/paper/main.pdf">Paper (PDF)</a></li>
+    <li><a href="https://github.com/Rayhaan1345/inplace-ttt-study">Code</a></li>
+    <li><a href="https://github.com/Rayhaan1345/inplace-ttt-study/blob/main/docs/results.md">Results log</a></li>
+    <li><a href="https://github.com/Rayhaan1345/inplace-ttt-study/blob/main/docs/plan.md">Study plan</a></li>
+    <li><a href="#cite">BibTeX</a></li>
+  </ul>
+</header>
+
+<div class="tldr">
+  <p>In-Place TTT lets a language model change some of its own weights while it reads. In one layer out of six, the MLP down-projection becomes a fast weight that takes a small gradient step after a chunk of 4,096 tokens. The published results show long-context gains over a matched control. A TTT model differs from its control in two ways, though. Its shared weights were trained together with the module, and its fast weights adapt at test time.</p>
+  <p>This study separates the two. I continued pretraining Qwen3-4B-Base with and without the module on identical data, then evaluated the TTT checkpoint a second time with the update switched off. Up to 64k tokens, switching the update off changes the RULER mean by at most 0.4 points. The gains over the control come from training with the module.</p>
+</div>
+
+<div class="stats" role="list">
+  <div role="listitem"><b>3.0B</b><span>tokens of continued pretraining per arm, at 32k context, two seeds</span></div>
+  <div role="listitem"><b>13 &times; 500</b><span>RULER tasks and instances per task, from 4k to 64k tokens</span></div>
+  <div role="listitem"><b class="teal">&le; 0.4</b><span>RULER points the update adds or removes up to 64k with plain RoPE, seeds averaged</span></div>
+  <div role="listitem"><b class="coral">&minus;2.5</b><span>RULER points the update costs at 64k with YaRN</span></div>
+</div>
+
+<section id="method" aria-labelledby="method-h">
+  <h2 id="method-h">How the model reads</h2>
+  <p>In-Place TTT edits six of the 36 layers of Qwen3-4B: layers 0, 6, 12, 18, 24 and 30. In those layers the MLP down-projection <i>W</i> becomes a fast weight. The model reads its input in chunks of 4,096 tokens. After a chunk, it forms a target from a causal convolution of the layer input and passes the target through a learned projection <i>P</i>. It then applies one outer-product step, <span class="eq">W &larr; W + &eta; &Sigma;<sub>t</sub> (P<sup>&#8868;</sup> conv(x)<sub>t</sub>) h<sub>t</sub><sup>&#8868;</sup></span>, with inner learning rate &eta; = 3. The next chunk is read with the updated <i>W</i>.</p>
+  <div class="card" id="reader">
+    <div class="bar">
+      <button type="button" class="btn" id="rd-play">Play</button>
+      <button type="button" class="btn" id="rd-step">Next chunk</button>
+      <button type="button" class="btn" id="rd-reset">Restart</button>
+      <div class="group" role="group" aria-label="Test-time update">
+        <button type="button" data-mode="on" aria-pressed="true">update on, &eta; = 3</button>
+        <button type="button" data-mode="off" aria-pressed="false">update off, &eta; = 0</button>
+      </div>
+      <div class="group" role="group" aria-label="Seed">
+        <button type="button" data-seed="0" aria-pressed="true">seed 1</button>
+        <button type="button" data-seed="1" aria-pressed="false">seed 2</button>
+      </div>
+    </div>
+    <svg id="rd-svg" role="img" aria-label="Animation of a 32,768-token input read in eight chunks, with the fast weights of six layers changing after the chunks"></svg>
+    <p class="status" id="rd-status" aria-live="polite">Press play to read a 32k-token input, the training length.</p>
+  </div>
+  <p class="cap"><b>Fast weights on held-out text.</b> Gauges show the measured accumulated change &#8214;W &minus; W<sub>0</sub>&#8214; after the first and the seventh update, on eight held-out 32k sequences. Values in between are interpolated linearly, which matches the near-linear growth the diagnostics found. The matrix tiles are a schematic. With &#8214;W<sub>0</sub>&#8214; between 112 and 126, seven updates move five layers by under 1% and layer 30 by 2.3 to 2.4%. At 4k the whole input fits in one chunk, so no update reaches the text the model reads.</p>
+</section>
+
+<section id="design" aria-labelledby="design-h">
+  <h2 id="design-h">What was tested</h2>
+  <p>The ablation needs two trained models and three evaluations. The arms, the decision rule and the analysis were fixed in a study plan written before the runs.</p>
+  <div class="card" id="steps">
+    <div class="steps-tabs" role="tablist" aria-label="Steps of the study">
+      <button type="button" role="tab" aria-selected="true" data-step="0">1. Train two arms</button>
+      <button type="button" role="tab" aria-selected="false" data-step="1">2. Evaluate twice</button>
+      <button type="button" role="tab" aria-selected="false" data-step="2">3. Split the gain</button>
+    </div>
+    <div class="step-text" id="st-text" aria-live="polite"></div>
+    <svg id="st-svg" role="img" aria-label="Diagram of the study step"></svg>
+    <div class="step-nav">
+      <button type="button" class="btn" id="st-prev">&lsaquo; Previous</button>
+      <div class="dots" aria-hidden="true"><span></span><span></span><span></span></div>
+      <button type="button" class="btn" id="st-next">Next &rsaquo;</button>
+    </div>
+  </div>
+</section>
+
+<section id="results" aria-labelledby="results-h">
+  <h2 id="results-h">Results</h2>
+  <p>The training effect accounts for the gains wherever the TTT arm leads the control. With the seeds averaged, the update effect stays within 0.4 points of zero at all lengths up to 64k with plain rotary embeddings. Its sign changes between seeds at 32k and at 64k. With YaRN at 64k, the update costs 2.5 points.</p>
+  <div class="card" id="explorer">
+    <div class="bar">
+      <div class="group" role="group" aria-label="View">
+        <button type="button" data-view="diff" aria-pressed="true">differences</button>
+        <button type="button" data-view="score" aria-pressed="false">scores</button>
+      </div>
+      <div class="group" role="group" aria-label="Seeds">
+        <button type="button" data-seeds="both" aria-pressed="true">both seeds</button>
+        <button type="button" data-seeds="s1" aria-pressed="false">seed 1</button>
+        <button type="button" data-seeds="s2" aria-pressed="false">seed 2</button>
+      </div>
+      <div class="group" role="group" aria-label="Task set" id="ex-tasks">
+        <button type="button" data-tasks="13" aria-pressed="true">13 tasks</button>
+        <button type="button" data-tasks="11" aria-pressed="false">11 tasks</button>
+      </div>
+    </div>
+    <svg id="ex-svg" role="img" aria-label="Chart of RULER results by context length"></svg>
+    <p class="status" id="ex-note" aria-live="polite">Hover or tap a point for its value and 95% interval.</p>
+  </div>
+  <p class="cap"><b>Differences</b> are paired on the same RULER instances, with 95% bootstrap intervals. <b>Scores</b> are the RULER mean over the 13 tasks. The 11-task set drops two tasks hit by a corpus-design mistake: synthetic retrieval documents in the training data taught both arms to answer some prompts with a new &ldquo;Question:&rdquo; block. Both arms share the artifact, and the 11-task results serve as a sensitivity check.</p>
+</section>
+
+<section id="eta" aria-labelledby="eta-h">
+  <h2 id="eta-h">Turning the update up and down</h2>
+  <p>If adapting at test time were the source of the gain, the inner learning rate at inference should matter. These variants of the seed-1 checkpoint change only &eta; at inference.</p>
+  <div class="card" id="dial">
+    <div class="bar">
+      <div class="group" role="group" aria-label="Inner learning rate at inference">
+        <button type="button" data-eta="0" aria-pressed="false">&eta; = 0, update off</button>
+        <button type="button" data-eta="1" aria-pressed="false">&eta; = 1</button>
+        <button type="button" data-eta="2" aria-pressed="true">&eta; = 3, as trained</button>
+        <button type="button" data-eta="3" aria-pressed="false">&eta; = 6</button>
+        <button type="button" data-eta="4" aria-pressed="false">&eta; = 3 with clipping</button>
+      </div>
+    </div>
+    <div class="dial-cards">
+      <div class="dial-card"><h3>32k, the training length</h3><div class="big" id="dl-32">75.8</div><div class="delta" id="dl-32d"></div><svg id="dl-32s" viewBox="0 0 320 34" role="img" aria-label="Difference to update off at 32k"></svg></div>
+      <div class="dial-card"><h3>64k, plain RoPE</h3><div class="big" id="dl-64">50.2</div><div class="delta" id="dl-64d"></div><svg id="dl-64s" viewBox="0 0 320 34" role="img" aria-label="Difference to update off at 64k"></svg></div>
+    </div>
+    <p class="status" id="dl-fw" aria-live="polite"></p>
+    <div class="replay" aria-label="Model output excerpt">
+      <div class="head">frequent-words task &middot; 64k with YaRN &middot; seed 1 &middot; update on, &eta; = 3 &middot; excerpt quoted in the report</div>
+      <div class="out" id="rp-out"></div>
+    </div>
+  </div>
+  <p class="cap"><b>Reading the dial.</b> Big numbers are the 13-task RULER mean, and the bars show the paired difference to the update-off variant with its 95% interval where the report gives one. At 32k the trained rate adds 0.9 points and twice that rate loses 0.8. At 64k any non-zero rate hurts, and the frequent-words task collapses at &eta; = 6. The clipping threshold reported for the method, &tau; = 10<sup>&minus;5</sup>, is four to five orders of magnitude below the measured per-chunk changes. Clipping at that value removes the update. With the update off, the same checkpoint lists the three frequent words correctly at 64k with YaRN and scores 93.2 on that task, against 53.7 with the update on.</p>
+</section>
+
+<section id="chunks" aria-labelledby="chunks-h">
+  <h2 id="chunks-h">Chunk size</h2>
+  <p>The released configuration reads chunks of 4,096 tokens, while the original paper's ablation on a smaller model preferred 512 to 1,024. These models were trained for 1B tokens with the three chunk sizes and compared with a control at the same budget, on the 11 tasks without the artifact.</p>
+  <div class="card" id="chunk">
+    <div class="bar">
+      <div class="group" role="group" aria-label="Test-time update">
+        <button type="button" data-cmode="on" aria-pressed="true">update on</button>
+        <button type="button" data-cmode="off" aria-pressed="false">update off</button>
+      </div>
+    </div>
+    <svg id="ch-svg" role="img" aria-label="Bar chart of chunk-size results"></svg>
+  </div>
+  <p class="cap"><b>With the update on</b>, chunk 4,096 is the worst of the three sizes. <b>With the update off</b>, the three sizes agree to within 0.4 points at 32k, and all of them lead the 1B control by 7.8 to 9.2 points at 64k. The chunk size therefore sets how much the active update costs, and the 64k advantage over the control is a training effect at this budget too.</p>
+</section>
+
+<section id="training" aria-labelledby="training-h">
+  <h2 id="training-h">How the module changes training</h2>
+  <p>The two arms train in different regimes. On identical batches the TTT arm's loss stays above the control's, by 0.017 nats early in training and by 0.007 at the end. Its gradient norm starts in the hundreds to thousands and falls to 20 to 30, while the control's stays near 0.2. Almost all of that gradient lies in six small target convolutions.</p>
+  <div class="card" id="share">
+    <div class="share">
+      <div>
+        <div class="row-label"><span><b>Share of parameters</b> in the six target convolutions</span><span>76,800 of 4.0 billion</span></div>
+        <div class="track"><div class="fill min" data-w="0.0019" style="background:var(--sand)"></div></div>
+      </div>
+      <div>
+        <div class="row-label"><span><b>Share of the squared gradient norm</b> on held-out text</span><span>49.58 of a total 49.60</span></div>
+        <div class="track"><div class="fill" data-w="99.9" style="background:var(--coral)"></div></div>
+      </div>
+    </div>
+  </div>
+  <p class="cap"><b>Where the gradient goes.</b> Gradient norms by parameter group on held-out 16k sequences, final seed-1 checkpoint; seed 2 gives 49.15 of 49.16. With the released gradient clipping at 1.0, the whole network's gradient is scaled down by a factor of about 50 at the end of training. The module may act as a regulariser and an optimiser perturbation. Whether the same rescaling without the module would give the same training effect is a question for the next study.</p>
+</section>
+
+<section id="figures" aria-labelledby="figures-h">
+  <h2 id="figures-h">Figures from the report</h2>
+  <div class="plates">
+    <div class="plate">
+      <div class="bar"><div class="group" role="group" aria-label="Seed for the RULER figure"><button type="button" data-fig="ruler" data-v="1" aria-pressed="true">seed 1</button><button type="button" data-fig="ruler" data-v="2" aria-pressed="false">seed 2</button></div></div>
+      <figure><div class="frame"><img id="fig-ruler" src="img/ruler_seed1.png" alt="RULER mean by context length for the base model, the control, the TTT arm and the TTT arm with the update off." width="960" height="570" loading="lazy"></div>
+      <figcaption class="cap"><b>RULER by length.</b> Mean over the 13 tasks with 95% bootstrap intervals; squares at the right are 64k with YaRN. The update-off checkpoint tracks the same checkpoint with the update on, and the gap to the control is the training effect.</figcaption></figure>
+    </div>
+    <div class="plate">
+      <div class="bar"><div class="group" role="group" aria-label="Task set for the effects figure"><button type="button" data-fig="effects" data-v="13" aria-pressed="true">13 tasks</button><button type="button" data-fig="effects" data-v="11" aria-pressed="false">11 tasks</button></div></div>
+      <figure><div class="frame"><img id="fig-effects" src="img/effects_13.png" alt="Paired differences by length: TTT minus control, the update effect and the training effect, for both seeds and their average." width="1575" height="495" loading="lazy"></div>
+      <figcaption class="cap"><b>The decomposition.</b> Left, TTT minus control. Middle, the update effect. Right, the training effect. Dashed lines are single seeds and the solid line averages them per instance.</figcaption></figure>
+    </div>
+    <div class="plate">
+      <div class="bar"><div class="group" role="group" aria-label="Seed for the training figure"><button type="button" data-fig="curves" data-v="1" aria-pressed="true">seed 1</button><button type="button" data-fig="curves" data-v="2" aria-pressed="false">seed 2</button></div></div>
+      <figure><div class="frame"><img id="fig-curves" src="img/curves_seed1.png" alt="Training loss and pre-clipping gradient norm per optimizer step for the TTT arm and the control." width="1500" height="540" loading="lazy"></div>
+      <figcaption class="cap"><b>Training dynamics.</b> Training loss (left) and pre-clipping gradient norm (right, log scale) per optimizer step. Both arms consume identical batches. Points are single steps and lines are running means.</figcaption></figure>
+    </div>
+    <div class="plate">
+      <figure><div class="frame"><img src="../../assets/img/ttt-overview.png" alt="Study design: two arms trained on identical data, the TTT checkpoint evaluated with its update on and off, and the gain split into an update effect and a training effect." width="1600" height="652" loading="lazy"></div>
+      <figcaption class="cap"><b>Study design.</b> Figure 1 of the report.</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section id="limits" aria-labelledby="limits-h">
+  <h2 id="limits-h">Limits and next steps</h2>
+  <p>The budget is 3.0B tokens per arm at 32k context, against the original paper's 20B at 32k followed by 15B at 64k. The 64k results therefore test extrapolation beyond the training length. The study covers one model, one benchmark with greedy decoding and two seeds. The learning-rate sweep, the clipping test and the learning curve use seed 1 only, and the chunk ablation stops at 1B tokens.</p>
+  <p>The natural next experiments are the same ablation at a larger budget and with a 64k training stage. The released code runs them from one configuration file. This text-model study is also the baseline for porting the method to a Qwen vision-language model.</p>
+</section>
+
+<section id="cite" aria-labelledby="cite-h">
+  <h2 id="cite-h">Citation</h2>
+  <div class="bib">
+    <button type="button" class="btn" id="bib-copy">Copy</button>
+<pre id="bib-text">@techreport{khan2026inplacettt,
+  title       = {In-Place Test-Time Training on {Qwen3-4B}:
+                 A Controlled Ablation of the Test-Time Update},
+  author      = {Khan, Rayhaan},
+  institution = {Mumbai AI Lab},
+  type        = {Interim report},
+  year        = {2026},
+  url         = {https://github.com/Rayhaan1345/inplace-ttt-study}
+}</pre>
+  </div>
+</section>
+
+<footer>
+  <span><a href="../../">&larr; Rayhaan Khan</a> &middot; <a class="mail mail-sm" href="#cite" data-n="yar" data-d="ni.baliam" aria-label="Email Rayhaan" title="Write an email"><span class="mail-art"><img src="../../assets/img/email.png" alt="" width="1008" height="124"></span></a></span>
+  <span><button type="button" class="theme-toggle" id="theme-toggle">dark mode</button></span>
+</footer>
+
+</main>
+<script src="../../assets/site.js" defer></script>
+<script src="ttt.js" defer></script>
+</body>
+</html>
