@@ -209,3 +209,23 @@
 }
 
 .proj section .sub-h { margin: 34px 0 10px; font-size: 21px; font-weight: 600; }
+
+/* a model that runs in the page: sliders, score and network activity */
+.tryit { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); grid-template-areas: "sl sc" "sl nt"; gap: 14px 30px; align-items: start; }
+.tryit .sliders { grid-area: sl; display: grid; gap: 9px; margin: 0; }
+.tryit .try-score { grid-area: sc; }
+.tryit .try-net { grid-area: nt; }
+.sliders label { display: grid; grid-template-columns: 1fr auto; gap: 0 10px; font-size: 15px; color: var(--ink-2); }
+.sliders label .unit { color: var(--muted); font-size: 13.5px; }
+.sliders output { color: var(--ink); font-feature-settings: "tnum" 1, "lnum" 1; }
+.sliders input { grid-column: 1 / -1; width: 100%; margin: 2px 0 0; accent-color: var(--teal); }
+.score-line { margin: 0; display: flex; align-items: baseline; gap: 12px; color: var(--muted); font-size: 15px; }
+.score-line b { font-size: 42px; font-weight: 600; line-height: 1; color: var(--ink); font-feature-settings: "tnum" 1, "lnum" 1; }
+.try-net rect.u { transition: fill-opacity 0.18s; }
+@media (max-width: 760px) {
+  .tryit { grid-template-columns: minmax(0, 1fr); grid-template-areas: "sc" "sl" "nt"; }
+  .tryit .try-score { position: sticky; top: 0; z-index: 1; background: var(--paper); padding: 6px 0 4px; border-bottom: 1px solid var(--rule); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .try-net rect.u { transition: none; }
+}

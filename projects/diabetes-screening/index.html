@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diabetes Risk Screening | Rayhaan Khan</title>
+<meta name="description" content="A diabetes risk model built on a public dataset of 768 patients and deployed as a web app, organised with Microsoft's Team Data Science Process during a research internship at M42 in Abu Dhabi.">
+<meta name="author" content="Rayhaan Khan">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Diabetes Risk Screening from Routine Measurements">
+<meta property="og:description" content="A model and a web app built during a research internship at M42.">
+<meta property="og:url" content="https://rayhaan1345.github.io/projects/diabetes-screening/">
+<meta property="og:image" content="https://rayhaan1345.github.io/assets/img/diabetes-app.png">
+<link rel="icon" href="../../favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;1,400&family=Spectral+SC:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../assets/site.css?v=3">
+<link rel="stylesheet" href="../../assets/project.css?v=3">
+<script>try{var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+</head>
+<body>
+<main class="proj">
+
+<p class="crumbs"><a href="../../">Rayhaan Khan</a> &middot; <a href="../../#research">Research</a></p>
+
+<header class="hero">
+  <h1>Diabetes Risk Screening from Routine Measurements</h1>
+  <p class="subtitle">A model and a web app built during a research internship at M42</p>
+  <p class="byline"><strong>Rayhaan Khan</strong></p>
+  <p class="context">Technical report, 2024 &middot; research internship at M42, Abu Dhabi, with Dr Shadab Khan</p>
+  <ul class="pills">
+    <li><a href="#try">Try the model</a></li>
+    <li><a href="https://diabetes-predictor-model.streamlit.app">Demo app</a></li>
+    <li><a href="https://github.com/Rayhaan1345/Diabetes-Predictor-Model">Code</a></li>
+    <li><a href="https://drive.google.com/file/d/1zrdhEaEcZr6TzN8UQHBsRLb4PaENmrNy/view">Report (PDF)</a></li>
+  </ul>
+</header>
+
+<div class="tldr">
+  <p>During a research internship at M42 in Abu Dhabi, I learned how a machine-learning project runs from start to finish. I built a model that estimates diabetes risk from eight routine measurements, such as glucose, BMI and blood pressure. I then deployed it as a web app where anyone can change the inputs and get a new score. The same model also runs on this page, inside your browser.</p>
+  <p>The project follows Microsoft's Team Data Science Process, from a project charter to a feedback form for users. It was my first complete machine-learning project, and this page also notes what I would do differently now.</p>
+</div>
+
+<div class="stats" role="list">
+  <div role="listitem"><b>768</b><span>women in the public dataset, aged 21 and over</span></div>
+  <div role="listitem"><b>8</b><span>routine measurements for a patient, from glucose to age</span></div>
+  <div role="listitem"><b class="coral">34.9%</b><span>of the women had diabetes, 268 of 768</span></div>
+  <div role="listitem"><b class="teal">5</b><span>stages of the Team Data Science Process, one folder for a stage</span></div>
+</div>
+
+<section id="try" aria-labelledby="try-h">
+  <h2 id="try-h">Try the model</h2>
+  <p>The model below runs on this page, inside your browser. It uses the trained weights from the app's model file, a small fastai neural network, and your inputs never leave your device. Move a slider and the score updates straight away.</p>
+  <div class="card">
+    <div class="tryit">
+      <form class="sliders" id="tr-form" aria-label="Measurements" onsubmit="return false"></form>
+      <div class="try-score">
+        <p class="score-line"><b id="tr-score" aria-live="polite">&hellip;</b><span>score</span></p>
+        <svg id="tr-gauge" role="img" aria-label="Where the score falls between 0 and 1.2"></svg>
+      </div>
+      <div class="try-net">
+        <svg id="tr-net" role="img" aria-label="Activity inside the network for the current inputs"></svg>
+      </div>
+    </div>
+    <div class="bar" style="margin:14px 0 0"><button type="button" class="btn" id="tr-reset">Back to the app's defaults</button></div>
+    <p class="status" id="tr-note" aria-live="polite">Loading the model&hellip;</p>
+  </div>
+  <p class="cap"><b>The deployed model, running in your browser.</b> The inputs become 29 numbers, shown teal when positive and coral when negative. The model learned a list of 15 numbers for an age and a list of 8 for a pregnancy count, and it adds the six measurements after scaling them. Layer 1 has 200 units and layer 2 has 100. A lit cell is an active unit, and a brighter cell is more active. The last step combines layer 2 into one number and squeezes it into the range 0 to 1.2. On 401 test inputs this page agrees with the Python model to within 0.00001.</p>
+</section>
+
+<section id="data" aria-labelledby="data-h">
+  <h2 id="data-h">The data</h2>
+  <p>The model learns from the Pima Indians Diabetes Database, a public dataset first collected by the US National Institute of Diabetes and Digestive and Kidney Diseases and shared on Kaggle. It covers 768 women of Pima heritage aged 21 or older. For a woman it records eight measurements and whether she had diabetes. Pick a measurement to compare the two groups.</p>
+  <div class="card" id="hist">
+    <div class="bar"><div class="group" role="group" aria-label="Measurement" id="hs-feats"></div></div>
+    <svg id="hs-svg" role="img" aria-label="Histogram of the chosen measurement for women with and without diabetes"></svg>
+    <p class="status" id="hs-note" aria-live="polite"></p>
+  </div>
+  <p class="cap"><b>Distributions from the dataset in the repository.</b> Bars stack the women without diabetes (navy) and with diabetes (coral). Several columns use 0 for a value that was never measured, since a glucose level, blood pressure or BMI of 0 is impossible.</p>
+</section>
+
+<section id="process" aria-labelledby="process-h">
+  <h2 id="process-h">From charter to feedback</h2>
+  <p>The repository follows Microsoft's Team Data Science Process. It splits a project into five stages, and the repository keeps one folder for a stage.</p>
+  <div class="card" id="tdsp">
+    <svg id="td-svg" role="img" aria-label="The five stages of the Team Data Science Process"></svg>
+    <div class="step-text" id="td-text" aria-live="polite" style="margin-top:14px"></div>
+    <div class="step-nav">
+      <button type="button" class="btn" id="td-prev">&lsaquo; Previous</button>
+      <a id="td-link" href="https://github.com/Rayhaan1345/Diabetes-Predictor-Model">open this stage's folder &#8599;</a>
+      <button type="button" class="btn" id="td-next">Next &rsaquo;</button>
+    </div>
+  </div>
+</section>
+
+<section id="model" aria-labelledby="model-h">
+  <h2 id="model-h">Explore the model</h2>
+  <p>The report settles on an XGBoost model, which scored best in my tests. The repository saves a different model, a fastai neural network for tabular data, and the app runs that one. It reads six measurements as numbers, and it treats age and the number of pregnancies as categories with learned embeddings. It was trained toward 1 for women with diabetes and 0 for women without, and its output range runs from 0 to 1.2. The map shows its score for combinations of glucose and BMI.</p>
+  <div class="card" id="map">
+    <div class="bar">
+      <span class="label">Age</span>
+      <div class="group" role="group" aria-label="Age" id="mp-ages"></div>
+      <span class="label">Pregnancies</span>
+      <div class="group" role="group" aria-label="Pregnancies" id="mp-preg"></div>
+    </div>
+    <svg id="mp-svg" role="img" aria-label="Heat map of the model's risk score over glucose and BMI"></svg>
+    <p class="status" id="mp-note" aria-live="polite">Hover or tap the map to read a score.</p>
+  </div>
+  <p class="cap"><b>Computed in your browser</b> by the model from the top of the page, on a grid of glucose and BMI values. The other inputs stay at the app's defaults: blood pressure 80, skin thickness 35, insulin 122 and a family-history score of 0.627. The ring marks the app's default of glucose 100 and BMI 33. At age 50 with no pregnancies, the score there is 0.356.</p>
+</section>
+
+<section id="drivers" aria-labelledby="drivers-h">
+  <h2 id="drivers-h">What moves the score</h2>
+  <p>Two views answer this question for two different models. For the deployed model, the bars show how far the score moves when one input runs across its usual range and the rest stay at the defaults. The report's XGBoost experiment ranks the inputs by how often its trees split on them.</p>
+  <div class="card" id="drv">
+    <div class="bar">
+      <div class="group" role="group" aria-label="Which model">
+        <button type="button" data-drv="dep" aria-pressed="true">deployed model</button>
+        <button type="button" data-drv="xgb" aria-pressed="false">XGBoost in the report</button>
+      </div>
+    </div>
+    <svg id="dv-svg" role="img" aria-label="Bar chart of how much each input moves the score"></svg>
+    <p class="status" id="dv-note" aria-live="polite"></p>
+  </div>
+  <p class="cap"><b>Both models put glucose first.</b> The deployed model's score is also sensitive to the family-history score, BMI and age. The XGBoost F-score counts splits, so it measures something different from the deployed model's response, and the two rankings need not agree.</p>
+</section>
+
+<section id="app" aria-labelledby="app-h">
+  <h2 id="app-h">The app</h2>
+  <p>The original app runs on Streamlit Community Cloud. Sliders set the measurements, and a button returns the score. It opens with a note that it does not replace a doctor, and it links to a feedback form. It runs the same model file as the version at the top of this page.</p>
+  <div class="plates">
+    <div class="plate"><figure><div class="frame"><img src="../../assets/img/diabetes-app.png" alt="The diabetes risk web app, with sliders for glucose, BMI, insulin, blood pressure, pregnancies and age, and a score of 0.36 for the default inputs." width="776" height="1020" loading="lazy" style="max-width:520px;margin:0 auto"></div>
+      <figcaption class="cap"><b>The demo app</b> with its default inputs. <a href="https://diabetes-predictor-model.streamlit.app">Open the app &#8599;</a></figcaption></figure></div>
+  </div>
+</section>
+
+<section id="later" aria-labelledby="later-h">
+  <h2 id="later-h">Looking back</h2>
+  <p>Looking back two years later, I would change several things. The dataset stores missing measurements as zeros: insulin is 0 for 374 of the 768 women. My model read those zeros as values, and I would now mark them as missing.</p>
+  <p>The report gives accuracy on the whole dataset, which includes the rows the model trained on. A test set kept aside from the start gives the number to trust. The model is also a regression on a yes-or-no outcome, so its score is not a calibrated probability. A classifier with a calibration check would make the score easier to read.</p>
+  <p>These lessons show up in my later work, where the evaluation is fixed before any runs.</p>
+</section>
+
+<footer>
+  <span><a href="../../">&larr; Rayhaan Khan</a> &middot; <a class="mail mail-sm" href="#later" data-n="yar" data-d="ni.baliam" aria-label="Email Rayhaan" title="Write an email"><span class="mail-art"><img src="../../assets/img/email.png" alt="" width="1008" height="124"></span></a></span>
+  <span><button type="button" class="theme-toggle" id="theme-toggle">dark mode</button></span>
+</footer>
+
+</main>
+<script src="../../assets/site.js?v=3" defer></script>
+<script src="net.js?v=3" defer></script>
+<script src="dm.js?v=3" defer></script>
+</body>
+</html>

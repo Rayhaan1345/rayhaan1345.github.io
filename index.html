@@ -197,22 +197,23 @@
       </svg>
     </figure>
     <div>
-      <h3><a href="https://diabetes-predictor-model.streamlit.app">Diabetes Risk Screening from Routine Measurements</a></h3>
+      <h3><a href="projects/diabetes-screening/">Diabetes Risk Screening from Routine Measurements</a></h3>
       <p class="authors"><strong>Rayhaan Khan</strong></p>
       <p class="venue">Technical report, 2024</p>
       <p class="context">Research internship at M42, Abu Dhabi, with Dr Shadab Khan</p>
       <ul class="actions">
+        <li><a href="projects/diabetes-screening/">project page</a></li>
         <li><a href="https://diabetes-predictor-model.streamlit.app">demo</a></li>
         <li><a href="https://github.com/Rayhaan1345/Diabetes-Predictor-Model">code</a></li>
         <li><a href="https://drive.google.com/file/d/1zrdhEaEcZr6TzN8UQHBsRLb4PaENmrNy/view">report</a></li>
         <li><button type="button" aria-expanded="false" aria-controls="dm-figs">figures</button></li>
       </ul>
-      <p class="summary">I trained models to estimate diabetes risk from eight routine measurements, including glucose, BMI, blood pressure and age, on a public dataset of 768 patients. I compared fastai and XGBoost models, explained predictions with feature importance and checked accuracy across subgroups. The deployed web app lets a user change the inputs and get a new estimate. The repository follows Microsoft's Team Data Science Process, from project charter to customer acceptance.</p>
+      <p class="summary">I trained models to estimate diabetes risk from eight routine measurements, including glucose, BMI, blood pressure and age, on a public dataset of 768 women. I compared fastai and XGBoost models, explained predictions with feature importance and checked accuracy across subgroups. The deployed web app lets a user change the inputs and get a new estimate, and the project page runs the same model in the browser. The repository follows Microsoft's Team Data Science Process, from project charter to customer acceptance.</p>
     </div>
     <div class="figures" id="dm-figs" hidden>
       <figure class="fig">
-        <div class="plate"><img src="assets/img/diabetes-app.png" alt="The diabetes risk web app, with sliders for glucose, BMI, insulin, blood pressure, pregnancies and age, and a risk estimate of 0.36 for the default inputs." loading="lazy" width="776" height="1020" style="max-width:520px;margin:0 auto"></div>
-        <figcaption><b>The demo app.</b> Sliders set the inputs and the model returns a risk estimate between 0 and 1. It is a student project and not a medical tool.</figcaption>
+        <div class="plate"><img src="assets/img/diabetes-app.png" alt="The diabetes risk web app, with sliders for glucose, BMI, insulin, blood pressure, pregnancies and age, and a score of 0.36 for the default inputs." loading="lazy" width="776" height="1020" style="max-width:520px;margin:0 auto"></div>
+        <figcaption><b>The demo app.</b> Sliders set the inputs and the model returns a score. Training pushed the score toward 1 for diabetes and 0 for none, and its range runs from 0 to 1.2. It is a student project and not a medical tool.</figcaption>
       </figure>
     </div>
   </article>
