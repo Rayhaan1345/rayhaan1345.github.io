@@ -122,6 +122,133 @@
     return "M" + x1 + " " + y1 + " C" + mx + " " + y1 + " " + mx + " " + y2 + " " + x2 + " " + y2;
   }
 
+  // ---------- 0. primer: a small fast-weight memory ----------
+  // Writing adds target x pattern (an outer product) to the change in W; reading multiplies by a pattern.
+
+  (function memory() {
+    var svg = $("mem-svg");
+    if (!svg) return;
+    var note = $("mem-note"), N = 8, r8 = 1 / Math.sqrt(8);
+    function unit(v) { var n = Math.sqrt(v.reduce(function (s, x) { return s + x * x; }, 0)); return v.map(function (x) { return x / n; }); }
+    var KEY = {
+      A: [1, 1, 1, 1, -1, -1, -1, -1].map(function (x) { return x * r8; }),
+      B: [1, -1, 1, -1, 1, -1, 1, -1].map(function (x) { return x * r8; }),
+      C: [1, 1, -1, -1, 1, 1, -1, -1].map(function (x) { return x * r8; })
+    };
+    KEY.A2 = unit(KEY.A.map(function (x, i) { return x + [0.16, -0.09, 0.12, 0.02, 0.1, -0.14, 0.04, 0.08][i]; }));
+    var VAL = { A: [0.9, 0.7, 0.3, -0.2, -0.6, -0.9, 0.1, 0.5], B: [-0.5, 0.2, 0.9, 0.8, 0.1, -0.4, -0.9, -0.3] };
+    var dW = [], writes = { A: 0, B: 0 }, busy = false, G = null, W = 0;
+    function zero() { dW = []; for (var i = 0; i < N; i++) { dW.push([0, 0, 0, 0, 0, 0, 0, 0]); } writes = { A: 0, B: 0 }; }
+    zero();
+    function shade(v, scale) {
+      var a = Math.min(1, Math.abs(v) / scale);
+      return "fill:var(--" + (v >= 0 ? "teal" : "coral") + ");fill-opacity:" + (0.06 + 0.9 * a).toFixed(2);
+    }
+    function build() {
+      clear(svg);
+      W = width(svg);
+      var c = Math.max(18, Math.min(40, Math.floor((W - 70) / 10.6))), g = 2;
+      var total = c + 16 + N * (c + g) + 26 + c, off = Math.max(0, (W - total) / 2);
+      var vx = off, mx = off + c + 16, top = 40, my = top + c + 26, ox = mx + N * (c + g) + 26;
+      G = { c: c, g: g, key: [], val: [], cells: [], out: [], mx: mx, my: my };
+      G.valLabel = text(svg, vx, my - 8, "target", { "font-size": 13, style: "fill:var(--ink-2)" });
+      G.keyLabel = text(svg, mx, top - 8, "pattern", { "font-size": 13, style: "fill:var(--ink-2)" });
+      text(svg, ox, my - 8, "output", { "font-size": 13, style: "fill:var(--ink-2)" });
+      for (var j = 0; j < N; j++) G.key.push(el("rect", { x: mx + j * (c + g), y: top, width: c, height: c, rx: 3, style: "fill:var(--rule)" }, svg));
+      for (var i = 0; i < N; i++) {
+        G.val.push(el("rect", { x: vx, y: my + i * (c + g), width: c, height: c, rx: 3, style: "fill:var(--rule)" }, svg));
+        G.out.push(el("rect", { x: ox, y: my + i * (c + g), width: c, height: c, rx: 3, style: "fill:var(--rule)" }, svg));
+        var row = [];
+        for (var j2 = 0; j2 < N; j2++) row.push(el("rect", { x: mx + j2 * (c + g), y: my + i * (c + g), width: c, height: c, rx: 2, style: "fill:var(--rule)" }, svg));
+        G.cells.push(row);
+      }
+      G.rowFrame = el("rect", { x: mx - 3, y: my - 3, width: N * (c + g) + 4, height: c + 6, rx: 4, fill: "none", style: "stroke:var(--coral);stroke-opacity:0", "stroke-width": 2 }, svg);
+      G.keyFrame = el("rect", { x: mx - 3, y: top - 3, width: N * (c + g) + 4, height: c + 6, rx: 4, fill: "none", style: "stroke:var(--navy);stroke-opacity:0", "stroke-width": 2 }, svg);
+      var by = my + N * (c + g) + 20;
+      text(svg, mx, by, "change in the fast weight, W − W", { "font-size": 13, style: "fill:var(--muted)" }).appendChild(sub0());
+      svg.setAttribute("viewBox", "0 0 " + W + " " + (by + 10));
+      paintMatrix();
+    }
+    function sub0() { var t = document.createElementNS(NS, "tspan"); t.setAttribute("dy", 4); t.setAttribute("font-size", 10); t.textContent = "0"; return t; }
+    function paintMatrix() {
+      var scale = 0.34;
+      for (var i = 0; i < N; i++) for (var j = 0; j < N; j++) G.cells[i][j].setAttribute("style", dW[i][j] === 0 ? "fill:var(--rule)" : shade(dW[i][j], scale));
+    }
+    function paintBar(rects, v, scale) { rects.forEach(function (r, i) { r.setAttribute("style", v ? shade(v[i], scale) : "fill:var(--rule)"); }); }
+    function dot(a, b) { return a.reduce(function (s, x, i) { return s + x * b[i]; }, 0); }
+    function norm(a) { return Math.sqrt(dot(a, a)); }
+
+    function write(name) {
+      busy = true;
+      var k = KEY[name], v = VAL[name], i = 0;
+      G.keyLabel.textContent = "pattern " + name;
+      G.valLabel.textContent = "target " + name;
+      G.keyFrame.style.strokeOpacity = "0";
+      paintBar(G.key, k, r8); paintBar(G.val, v, 1); paintBar(G.out, null);
+      function rowStep() {
+        for (var j = 0; j < N; j++) dW[i][j] += v[i] * k[j];
+        G.rowFrame.setAttribute("y", G.my + i * (G.c + G.g) - 3);
+        G.rowFrame.style.strokeOpacity = "0.9";
+        paintMatrix();
+        i++;
+        if (i < N) setTimeout(rowStep, 260);
+        else setTimeout(function () { G.rowFrame.style.strokeOpacity = "0"; busy = false; }, 300);
+      }
+      setTimeout(rowStep, 350);
+      writes[name]++;
+      note.textContent = writes[name] > 1
+        ? "Pair " + name + " written again. The same association gets stronger."
+        : name === "A" ? "Pair A written. The change to W is target A times pattern A: rows follow the target, and columns follow the pattern."
+        : "Pair B written on top. Pattern B is at right angles to pattern A, so the two pairs share the matrix without overwriting one another.";
+    }
+
+    function read(which) {
+      busy = true;
+      var q = KEY[which], out = [];
+      for (var i = 0; i < N; i++) out.push(dot(dW[i], q));
+      G.keyLabel.textContent = which === "A" ? "reading with pattern A" : which === "A2" ? "reading with A, slightly changed" : "reading with a new pattern";
+      G.keyFrame.style.strokeOpacity = "0.9";
+      paintBar(G.key, q, r8); paintBar(G.val, null); paintBar(G.out, null);
+      G.valLabel.textContent = "target";
+      var shown = 0;
+      function step() {
+        G.out[shown].setAttribute("style", Math.abs(out[shown]) < 1e-9 ? "fill:var(--rule)" : shade(out[shown], 1));
+        shown++;
+        if (shown < N) setTimeout(step, 140); else busy = false;
+      }
+      setTimeout(step, 250);
+      var n = norm(out);
+      if (n < 0.08) {
+        note.textContent = writes.A + writes.B === 0 ? "Very little comes back, because the memory is empty. Write a pair first."
+          : which !== "C" && writes.A === 0 ? "Very little comes back, because pair A has not been written yet."
+          : "Very little comes back. This pattern is unlike the stored patterns, so the memory has no target for it.";
+        return;
+      }
+      var sA = dot(out, VAL.A) / (n * norm(VAL.A)), sB = dot(out, VAL.B) / (n * norm(VAL.B));
+      var best = sA >= sB ? "A" : "B", s = Math.max(sA, sB);
+      setTimeout(function () { paintBar(G.val, VAL[best], 1); G.valLabel.textContent = "target " + best; }, 250 + 140 * N);
+      var strength = n / (norm(VAL[best]) * Math.max(1, writes[best]));
+      note.textContent = which === "A2"
+        ? "A slightly changed pattern still returns target " + best + ", with similarity " + s.toFixed(2) + " and " + Math.round(100 * strength) + "% of the full strength."
+        : "The output matches target " + best + ", with similarity " + s.toFixed(2) + " on a scale where 1 is a perfect match.";
+    }
+
+    [].slice.call(document.querySelectorAll("#mem [data-mem]")).forEach(function (b) {
+      b.addEventListener("click", function () {
+        if (busy) return;
+        var a = b.dataset.mem;
+        if (a === "wA") write("A");
+        else if (a === "wB") write("B");
+        else if (a === "rA") read("A");
+        else if (a === "rA2") read("A2");
+        else if (a === "rC") read("C");
+        else { zero(); paintBar(G.key, null); paintBar(G.val, null); paintBar(G.out, null); G.keyLabel.textContent = "pattern"; G.keyFrame.style.strokeOpacity = "0"; paintMatrix(); note.textContent = "Cleared. The fast weight is back to its trained values."; }
+      });
+    });
+    build();
+    window.addEventListener("resize", debounce(function () { if (width(svg) !== W) build(); }));
+  })();
+
   // ---------- 1. reading animation ----------
 
   (function reader() {

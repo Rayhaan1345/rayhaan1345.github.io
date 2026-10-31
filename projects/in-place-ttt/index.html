@@ -31,6 +31,7 @@
   <p class="byline"><strong>Rayhaan Khan</strong> &middot; Mumbai AI Lab</p>
   <p class="context">Interim report from a research internship at MBZUAI with Dr Salman Khan and Hanoona Rasheed</p>
   <ul class="pills">
+    <li><a href="#primer">Primer</a></li>
     <li><a href="https://github.com/Rayhaan1345/inplace-ttt-study/blob/main/paper/main.pdf">Paper (PDF)</a></li>
     <li><a href="https://github.com/Rayhaan1345/inplace-ttt-study">Code</a></li>
     <li><a href="https://github.com/Rayhaan1345/inplace-ttt-study/blob/main/docs/results.md">Results log</a></li>
@@ -50,6 +51,41 @@
   <div role="listitem"><b class="teal">&le; 0.4</b><span>RULER points the update adds or removes up to 64k with plain RoPE, seeds averaged</span></div>
   <div role="listitem"><b class="coral">&minus;2.5</b><span>RULER points the update costs at 64k with YaRN</span></div>
 </div>
+
+<section id="primer" aria-labelledby="primer-h">
+  <h2 id="primer-h">Primer: learning while reading</h2>
+  <p>A language model learns during training and then stops. When it reads a new document, its weights stay fixed. It keeps track of earlier text by looking back at it with attention.</p>
+  <p>Test-time training lets the model keep learning while it reads. The model treats the text in front of it as a small training set. After a stretch of text, it takes one small gradient step on a few of its own weights, called fast weights. It then reads the next stretch with the updated weights.</p>
+  <p>Think of a student who, after finishing a chapter of a long book, writes a few notes in the margin. The notes are short, and the student reads later chapters with them in mind. Fast weights play the part of those notes.</p>
+  <div class="card">
+    <ol class="flow" aria-label="One round of test-time training">
+      <li><b>Read</b><span>a chunk of 4,096 tokens</span></li>
+      <li><b>Pair up</b><span>the layer's hidden patterns with targets made from the same text</span></li>
+      <li><b>Write</b><span>the pairs into the fast weight with one gradient step</span></li>
+      <li><b>Read on</b><span>with the updated weight</span></li>
+    </ol>
+  </div>
+
+  <h3 class="sub-h">What gets written</h3>
+  <p>In In-Place TTT the fast weight is the matrix <i>W</i> that turns a layer's hidden pattern into the layer's output. An update adds an outer product of a target and a pattern. That stores an association: when this pattern appears, push the output toward this target.</p>
+  <p>Later, a similar pattern gets back part of the stored target, and an unrelated pattern gets back very little. The matrix acts as a small memory that is written by gradient steps and read by ordinary computation. Try it below.</p>
+  <div class="card" id="mem">
+    <div class="bar">
+      <span class="label">Write</span>
+      <button type="button" class="btn" data-mem="wA">pair A</button>
+      <button type="button" class="btn" data-mem="wB">pair B</button>
+      <span class="label">Read with</span>
+      <button type="button" class="btn" data-mem="rA">pattern A</button>
+      <button type="button" class="btn" data-mem="rA2">A, slightly changed</button>
+      <button type="button" class="btn" data-mem="rC">a new pattern</button>
+      <button type="button" class="btn" data-mem="clear">Clear</button>
+    </div>
+    <svg id="mem-svg" role="img" aria-label="A small matrix memory: writing pattern and target pairs as outer products, and reading them back"></svg>
+    <p class="status" id="mem-note" aria-live="polite">Start by writing pair A.</p>
+  </div>
+  <p class="cap"><b>A small fast-weight memory.</b> Teal cells are positive and coral cells negative. Writing a pair adds the target times the pattern to the matrix, one row per target value. Reading multiplies the matrix by a pattern. The two stored patterns are at right angles, so reading with one returns its own target and leaves the other alone. The numbers are made up, and a layer in the model works with thousands of dimensions.</p>
+  <p>In the model, the target comes from the layer's own input: a short causal convolution over recent tokens, passed through a learned projection. No labels are needed, so the model can learn from any text it reads. Whether these notes help is the question of this study. If they do, switching the writing off should cost accuracy.</p>
+</section>
 
 <section id="method" aria-labelledby="method-h">
   <h2 id="method-h">How the model reads</h2>

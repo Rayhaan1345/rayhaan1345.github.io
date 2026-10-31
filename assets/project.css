@@ -207,3 +207,5 @@
   .flow { grid-template-columns: 1fr; gap: 10px; }
   .flow li + li::before { content: "\2193"; left: 50%; top: -12px; transform: translateX(-50%); }
 }
+
+.proj section .sub-h { margin: 34px 0 10px; font-size: 21px; font-weight: 600; }
