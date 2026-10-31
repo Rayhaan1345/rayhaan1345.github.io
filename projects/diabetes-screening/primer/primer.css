@@ -15,12 +15,6 @@
 .counts .miss b { color: var(--coral); }
 
 .sliders { display: grid; gap: 9px; margin: 0; }
-.tree-sliders { margin: 12px 0 0; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 18px; }
-.leaves { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 18px; font-size: 14.5px; color: var(--ink-2); }
-.leaves li::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 8px; vertical-align: 0; background: var(--navy); opacity: 0.6; }
-.leaves li.yes::before { background: var(--coral); }
-
-.unit-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 16px 28px; align-items: start; }
 
 .sv-grid { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: 16px 24px; align-items: start; margin-bottom: 12px; }
 .sv-table { width: 100%; border-collapse: collapse; font-size: 14.5px; font-feature-settings: "tnum" 1, "lnum" 1; }
@@ -65,6 +59,9 @@ ul.plain li { margin: 4px 0; }
 .recall details p { margin: 10px 14px 12px; color: var(--ink-2); }
 .recall summary a { font-weight: 600; }
 
+/* One line per section pointing to the matching chapter of the full How AI Learns primer. */
+.proj p.more { max-width: 46em; margin: 8px 0 18px; padding: 6px 12px; border-left: 3px solid var(--sand); font-size: 15px; color: var(--ink-2); }
+
 /* Illustrated equations: a value in a box, with its meaning underneath. Coloured boxes match the figure. */
 .eqn { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px 6px; max-width: 46em; margin: 6px 0 16px; }
 .eqn .t { display: inline-flex; flex-direction: column; align-items: center; min-width: 2.6em; padding: 4px 10px 4px; border: 1.5px solid var(--rule); border-radius: 7px; background: var(--bg); }
@@ -108,7 +105,5 @@ ul.plain li { margin: 4px 0; }
 @media (max-width: 760px) {
   .toc ol { columns: 1; }
   .counts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .tree-sliders { grid-template-columns: minmax(0, 1fr); }
-  .leaves { grid-template-columns: minmax(0, 1fr); }
-  .unit-grid, .sv-grid { grid-template-columns: minmax(0, 1fr); }
+  .sv-grid { grid-template-columns: minmax(0, 1fr); }
 }

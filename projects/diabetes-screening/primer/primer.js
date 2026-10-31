@@ -1,9 +1,10 @@
-// Primer for the diabetes project: the base rate and the split, a one-rule model, a depth-2 tree,
-// tree depth and overfitting, boosting tree by tree, a single ReLU unit, the network's layout,
+// Primer for the diabetes project: the base rate and the split, a one-rule model, decision trees grown by hand,
+// tree depth and overfitting, boosting on one input and on two, a single unit with a choice of activation, the network's layout,
 // cut-offs, split counts against the shuffle test, a Shapley value toy and the zeros in the data,
 // plus the warm-up quiz and the tree to rebuild from memory.
+// The tree, depth, boosting and unit figures come from the modules in treelab.js, boostlab.js and neuronlab.js (mounted in labs below).
 // data.json holds the 768 rows with the same 80/20 split (random seed 42) as the rebuilt XGBoost model,
-// and a depth curve for decision trees averaged over 50 random 80/20 splits.
+// and a depth curve for decision trees on all eight measurements averaged over 50 random 80/20 splits.
 (function () {
   "use strict";
   var NS = "http://www.w3.org/2000/svg";
@@ -49,28 +50,11 @@
     });
     return bs;
   }
-  // A labelled slider in the style of the project page: [key, label, min, max, step, value].
-  function slider(container, s, onInput) {
-    var lab = document.createElement("label"), name = document.createElement("span"), o = document.createElement("output"), inp = document.createElement("input");
-    name.textContent = s[1];
-    inp.type = "range"; inp.min = s[2]; inp.max = s[3]; inp.step = s[4]; inp.value = s[5];
-    lab.appendChild(name); lab.appendChild(o); lab.appendChild(inp); container.appendChild(lab);
-    function show() { o.textContent = Number(inp.value).toFixed(s[4] < 1 ? (s[4] < 0.1 ? 2 : 1) : 0); }
-    inp.addEventListener("input", function () { show(); onInput(); });
-    show();
-    return { input: inp, show: show, get: function () { return Number(inp.value); }, set: function (v) { inp.value = v; show(); } };
-  }
   function count(D, sel) { var n = 0; for (var i = 0; i < D.y.length; i++) if (sel(i)) n++; return n; }
   function setText(id, v) { var n = $(id); if (n) n.textContent = v; }
   function signed(v, d) { return (v < 0 ? "−" : "+") + Math.abs(v).toFixed(d); }
   // Woman A is held-out row 31 (glucose 158, BMI 31.6, had diabetes). The page follows her from section 2 on.
   var A = 31;
-  // A ring with a letter, to mark Woman A on a plot.
-  function markA(svg, x, y) {
-    el("circle", { cx: x, cy: y, r: 7, style: "fill:none;stroke:var(--ink)", "stroke-width": 2 }, svg);
-    text(svg, x + 10, y - 7, "A", { "font-size": 13, "font-weight": 600, style: "fill:var(--ink);paint-order:stroke;stroke:var(--paper);stroke-width:4px" });
-  }
-
   Promise.all([
     fetch("data.json").then(function (r) { return r.json(); }),
     fetch("../xgb.json").then(function (r) { return r.json(); })
@@ -82,8 +66,8 @@
     D.y.forEach(function (v, i) { (D.test[i] ? D.held : D.train).push(i); });
     waffle(D, "wf", [0, 1], ["the data", "always say no"]);
     waffle(D, "sp", [0, 2], ["all 768", "80/20 split"]);
-    rule(D); tree(D); depth(D); unit(D); network(D); splitCounts(X); zeros(D);
-    if (typeof DiabetesXGB !== "undefined") { var S = scores(D, X); boost(D, S); cutoff(D, S); }
+    rule(D); labs(D); network(D); splitCounts(X); zeros(D);
+    if (typeof DiabetesXGB !== "undefined") { var S = scores(D, X); cutoff(D, S); }
     shapley();
   });
 
@@ -218,103 +202,112 @@
     });
   }
 
-  // ---------- 3. a decision tree of depth 2 ----------
+  // ---------- 3 to 7. trees, depth, boosting and one unit: the modules of the How AI Learns primer ----------
 
-  function tree(D) {
-    var svg = $("tr-svg"), note = $("tr-note"), list = $("tr-leaves"), W = 0, G = null;
-    var gx = [40, 200], by = [15, 60];
-    var S = {
-      g: slider($("tr-sliders"), ["g", "First: glucose at least", 60, 190, 1, 128], update),
-      bl: slider($("tr-sliders"), ["bl", "If lower glucose: BMI at least", 18, 55, 0.5, 27], update),
-      bh: slider($("tr-sliders"), ["bh", "If higher glucose: BMI at least", 18, 55, 0.5, 30], update)
+  // TreeLab, BoostLab and NeuronLab (treelab.js, boostlab.js, neuronlab.js, on top of kit-lite.js, Plotly and D3) draw these figures.
+  // The words in them come from the options below. Woman A is marked with a star in each figure.
+  var WA = [158, 31.6];   // Woman A: glucose in mg/dL and BMI
+
+  function labs(D) {
+    var ids = ["tr-lab", "dp-lab", "bo1-lab", "bo2-lab", "un-lab"];
+    if (typeof Kit === "undefined" || typeof TreeLab === "undefined" || typeof BoostLab === "undefined" || typeof NeuronLab === "undefined" || typeof Plotly === "undefined" || typeof d3 === "undefined") {
+      ids.forEach(function (id) { var n = $(id); if (n) n.textContent = "This figure needs Plotly and D3, which did not load. Check your connection and reload the page."; });
+      return;
+    }
+    var gj = D.features.indexOf("Glucose"), bj = D.features.indexOf("BMI");
+    var rows = D.X.map(function (r, i) { return { n: i + 1, Glucose: r[gj], BMI: r[bj], y: D.y[i], test: D.test[i] }; });
+    function held(r) { return r.test === 1; }
+    var base = {
+      rows: rows, features: ["Glucose", "BMI"], featureLabels: ["glucose, mg/dL", "BMI, kg/m²"], featureNames: ["glucose", "BMI"], units: ["mg/dL", "kg/m²"],
+      label: "y", classNames: ["no diabetes", "had diabetes"], noun: "woman", nouns: "women", heldOut: held, ranges: [[40, 205], [15, 70]],
+      ids: "n", idLabel: "Row", digits: [1, 2], stepFor: [0.5, 0.05], mark: { x: WA, label: "A", name: "Woman A" },
+      footnote: "A zero for glucose or BMI means the measurement was not taken, which is why a few women lie off the edge of the plot. The last section returns to this."
     };
-    function leafOf(i, g, bl, bh) { return D.g[i] >= g ? (D.b[i] >= bh ? 3 : 2) : (D.b[i] >= bl ? 1 : 0); }
-    function stats(idx, g, bl, bh) {
-      var L = [[0, 0], [0, 0], [0, 0], [0, 0]];
-      idx.forEach(function (i) { L[leafOf(i, g, bl, bh)][D.y[i]]++; });
-      return L;
-    }
-    function build() {
-      clear(svg);
-      W = width(svg);
-      var m = { l: 40, r: 8, t: 8, b: 40 }, H = Math.min(380, Math.max(250, W * 0.55));
-      var X = function (g) { return m.l + (W - m.l - m.r) * (Math.max(gx[0], Math.min(gx[1], g)) - gx[0]) / (gx[1] - gx[0]); };
-      var Y = function (b) { return H - m.b - (H - m.t - m.b) * (Math.max(by[0], Math.min(by[1], b)) - by[0]) / (by[1] - by[0]); };
-      G = { X: X, Y: Y, m: m, H: H, boxes: [], labels: [] };
-      for (var k = 0; k < 4; k++) G.boxes.push(el("rect", { style: "fill:var(--navy);fill-opacity:0.08" }, svg));
-      D.train.forEach(function (i) {
-        el("circle", { cx: X(D.g[i]).toFixed(1), cy: Y(D.b[i]).toFixed(1), r: W < 560 ? 2.2 : 2.8, style: "fill:var(--" + (D.y[i] ? "coral" : "navy") + ");fill-opacity:0.75" }, svg);
-      });
-      G.v = el("line", { style: "stroke:var(--ink)", "stroke-width": 2.5 }, svg);
-      G.hl = el("line", { style: "stroke:var(--ink)", "stroke-width": 2 }, svg);
-      G.hh = el("line", { style: "stroke:var(--ink)", "stroke-width": 2 }, svg);
-      for (k = 0; k < 4; k++) G.labels.push(text(svg, 0, 0, "", { "text-anchor": "middle", "font-size": 13, "font-weight": 600, style: "fill:var(--ink);paint-order:stroke;stroke:var(--paper);stroke-width:4px" }));
-      markA(svg, X(D.g[A]), Y(D.b[A]));
-      [60, 100, 140, 180].forEach(function (g) { text(svg, X(g), H - m.b + 15, String(g), { "text-anchor": "middle", "font-size": 12, style: "fill:var(--muted)" }); });
-      [20, 30, 40, 50].forEach(function (b) { text(svg, m.l - 6, Y(b) + 4, String(b), { "text-anchor": "end", "font-size": 12, style: "fill:var(--muted)" }); });
-      text(svg, (m.l + W - m.r) / 2, H - 4, "glucose, mg/dL", { "text-anchor": "middle", "font-size": 13, style: "fill:var(--ink-2)" });
-      text(svg, 12, (m.t + H - m.b) / 2, "BMI", { "text-anchor": "middle", "font-size": 13, transform: "rotate(-90 12 " + ((m.t + H - m.b) / 2) + ")", style: "fill:var(--ink-2)" });
-      svg.setAttribute("viewBox", "0 0 " + W + " " + H);
-      update();
-    }
-    function update() {
-      var g = S.g.get(), bl = S.bl.get(), bh = S.bh.get(), X = G.X, Y = G.Y, m = G.m;
-      var x = X(g), x0 = m.l, x1 = W - m.r, y0 = m.t, y1 = G.H - m.b;
-      var R = [[x0, Y(bl), x, y1], [x0, y0, x, Y(bl)], [x, Y(bh), x1, y1], [x, y0, x1, Y(bh)]];
-      var L = stats(D.train, g, bl, bh), held = 0, ok = 0;
-      D.held.forEach(function (i) { var s = L[leafOf(i, g, bl, bh)]; if ((s[1] > s[0] ? 1 : 0) === D.y[i]) held++; });
-      L.forEach(function (s) { ok += Math.max(s[0], s[1]); });
-      list.innerHTML = "";
-      var names = ["glucose below " + g + ", BMI below " + bl, "glucose below " + g + ", BMI " + bl + " or more", "glucose " + g + " or more, BMI below " + bh, "glucose " + g + " or more, BMI " + bh + " or more"];
-      R.forEach(function (r, k) {
-        var s = L[k], tot = s[0] + s[1], yes = s[1] > s[0];
-        G.boxes[k].setAttribute("x", r[0]); G.boxes[k].setAttribute("y", r[1]);
-        G.boxes[k].setAttribute("width", Math.max(0, r[2] - r[0])); G.boxes[k].setAttribute("height", Math.max(0, r[3] - r[1]));
-        G.boxes[k].setAttribute("style", "fill:var(--" + (yes ? "coral" : "navy") + ");fill-opacity:" + (yes ? 0.16 : 0.07));
-        G.labels[k].setAttribute("x", ((r[0] + r[2]) / 2).toFixed(1)); G.labels[k].setAttribute("y", ((r[1] + r[3]) / 2 + 5).toFixed(1));
-        G.labels[k].textContent = tot ? Math.round(100 * s[1] / tot) + "%" : "";
-        var li = document.createElement("li"); if (yes) li.className = "yes";
-        li.textContent = names[k] + ": " + s[1] + " of " + tot + " had diabetes. Call: " + (yes ? "yes." : "no.");
-        list.appendChild(li);
-      });
-      G.v.setAttribute("x1", x); G.v.setAttribute("x2", x); G.v.setAttribute("y1", y0); G.v.setAttribute("y2", y1);
-      G.hl.setAttribute("x1", x0); G.hl.setAttribute("x2", x); G.hl.setAttribute("y1", Y(bl)); G.hl.setAttribute("y2", Y(bl));
-      G.hh.setAttribute("x1", x); G.hh.setAttribute("x2", x1); G.hh.setAttribute("y1", Y(bh)); G.hh.setAttribute("y2", Y(bh));
-      var ka = leafOf(A, g, bl, bh), sa = L[ka], na = sa[0] + sa[1], yes = sa[1] > sa[0];
-      setText("tr-eq-box", names[ka]); setText("tr-eq-a", sa[1]); setText("tr-eq-n", na);
-      setText("tr-eq-s", na ? Math.round(100 * sa[1] / na) + "%" : "none");
-      setText("tr-eq-call", yes ? "more than half: call yes" : "half or less: call no");
-      note.textContent = "Training accuracy " + pct(ok / D.train.length) + ". Held-out accuracy " + pct(held / D.held.length) + ". The numbers in the boxes give the share with diabetes.";
-    }
-    // Training: try all questions on a grid and keep the ones with the most correct training calls.
-    function fit() {
-      var best = [-1, 0, 0, 0];
-      for (var g = 60; g <= 190; g++) {
-        var left = D.train.filter(function (i) { return D.g[i] < g; }), right = D.train.filter(function (i) { return D.g[i] >= g; });
-        var bl = bestB(left), bh = bestB(right);
-        if (bl[0] + bh[0] > best[0]) best = [bl[0] + bh[0], g, bl[1], bh[1]];
+    function opt(extra) { var o = {}; Object.keys(base).forEach(function (k) { o[k] = base[k]; }); Object.keys(extra).forEach(function (k) { o[k] = extra[k]; }); return o; }
+    function num(v) { return String(Math.round(v * 100) / 100); }
+
+    // Decision tree: grow it box by box. Woman A's box follows the tree the reader has grown.
+    TreeLab.mountGrow($("tr-lab"), opt({
+      maxDepth: 4, aria: "Glucose and BMI of the women, with the boxes of the tree you are growing behind them and Woman A starred", treeAria: "The tree you are growing, drawn from left to right",
+      onChange: function (info) {
+        var T = info.tree, path = TreeLab.core.path(T, WA), nd = T.nodes[path[path.length - 1]], n = nd.n0 + nd.n1, parts = [];
+        for (var k = 0; k < path.length - 1; k++) {
+          var q = T.nodes[path[k]];
+          parts.push((q.f === 0 ? "glucose" : "BMI") + (path[k + 1] === q.l ? " at most " : " above ") + num(q.t));
+        }
+        setText("tr-eq-box", parts.length ? parts.join(", ") : "no question yet, so all training women");
+        setText("tr-eq-a", nd.n1); setText("tr-eq-n", n); setText("tr-eq-s", n ? Math.round(100 * nd.n1 / n) + "%" : "none");
+        setText("tr-eq-call", nd.n1 > nd.n0 ? "more than half: call yes" : "half or less: call no");
       }
-      var from = [S.g.get(), S.bl.get(), S.bh.get()];
-      tween(700, function (e) {
-        S.g.set(Math.round(from[0] + (best[1] - from[0]) * e));
-        S.bl.set(Math.round(2 * (from[1] + (best[2] - from[1]) * e)) / 2);
-        S.bh.set(Math.round(2 * (from[2] + (best[3] - from[2]) * e)) / 2);
-        update();
-      });
-    }
-    function bestB(idx) {
-      var best = [-1, 18];
-      for (var b = 18; b <= 55; b += 0.5) {
-        var c = [[0, 0], [0, 0]];
-        idx.forEach(function (i) { c[D.b[i] >= b ? 1 : 0][D.y[i]]++; });
-        var ok = Math.max(c[0][0], c[0][1]) + Math.max(c[1][0], c[1][1]);
-        if (ok > best[0]) best = [ok, b];
+    }));
+
+    // Depth: the same two measurements, deeper and deeper, against 50 other random splits.
+    TreeLab.mountDepth($("dp-lab"), opt({
+      maxDepth: 12, depth: 2, splits: 50, heldFrac: 0.2, footnote: "", aria: "Glucose and BMI of the women, divided into the boxes of a tree at the chosen depth limit, with Woman A starred",
+      curveAria: "Accuracy of the tree against its depth limit, on the training women, the held-out women and 50 other random splits",
+      onChange: function (info) {
+        var gap = 100 * (info.train - info.held);
+        setText("dp-eq-tr", pct(info.train)); setText("dp-eq-he", pct(info.held)); setText("dp-eq-gap", (gap < 0 ? "−" : "") + Math.abs(gap).toFixed(1));
       }
-      return best;
+    }));
+
+    // Boosting, one input: stumps fitted to the gaps, with Woman A, B and C as the women the equation boxes follow.
+    BoostLab.mount1D($("bo1-lab"), {
+      rows: rows, x: "Glucose", y: "y", xLabel: "glucose, mg/dL", yLabel: "had diabetes (1) or not (0)", residLabel: "gap: label minus score", xUnit: "mg/dL", yUnit: "",
+      noun: "woman", nouns: "women", heldOut: held, xMin: 40, xMax: 205, yMax: 1.12, maxTrees: 100, eta: 0.3, depth: 1, lambda: 1, ids: "n", idLabel: "Row",
+      probes: [{ name: "Woman A", row: A }, { name: "Woman B", row: 30 }, { name: "Woman C", row: 23 }],
+      aria: "Glucose of the training women against their label, with the sum of the stumps added so far drawn as a staircase",
+      residAria: "The gap between label and score for the training women as stumps are added, and the next stump's answer",
+      footnote: "One input and large steps (stumps, learning rate 0.3) so that a few trees show the idea. The project's model uses trees of depth 3 and a learning rate of 0.01."
+    });
+
+    // Boosting, two inputs, with the settings of the project's model.
+    var bo2 = null;
+    function womanScore(info) {
+      if (!bo2) return;
+      var m = bo2.model(), s = BoostLab.core.margin(m, WA, info.k);
+      setText("bo-eq-k", info.k); setText("bo-eq-sum", signed(s - m.base, 3)); setText("bo-eq-s", s.toFixed(3));
     }
-    $("tr-fit").addEventListener("click", fit);
-    build();
-    window.addEventListener("resize", debounce(function () { if (width(svg) !== W) build(); }));
+    bo2 = BoostLab.mountBoundary($("bo2-lab"), opt({
+      maxTrees: 100, eta: 0.01, depth: 3, lambda: 1, objective: "squared", classNames: ["no diabetes", "diabetes"], reference: { label: "Held-out accuracy of the project's model, all eight inputs", held: 0.786 },
+      aria: "A heat map of the boosted model's score over glucose and BMI, with the women on top and Woman A starred",
+      footnote: "Two inputs, so the numbers differ from the project's eight-input model. Learning rate, leaf penalty and depth are the project's.",
+      onChange: womanScore
+    }));
+    womanScore({ k: 0 });
+
+    // One unit: glucose and BMI scaled as in the text, a ReLU to begin with, the training women as the points of fit mode.
+    var mg = D.scale.Glucose, mb = D.scale.BMI, unit = null;
+    var sg = (WA[0] - mg[0]) / mg[1], sb = (WA[1] - mb[0]) / mb[1];
+    var G = { none: "(", step: "step(", sigmoid: "σ(", tanh: "tanh(", relu: "ReLU(", gelu: "GELU(" };
+    function womanUnit(st) {
+      var z = st.w[0] * sg + st.w[1] * sb + st.b, a = NeuronLab.ACTS[st.activation].f(z);
+      setText("un-eq-g", G[st.activation]);
+      setText("un-eq-wg", st.w[0].toFixed(2)); setText("un-eq-wb", st.w[1].toFixed(2)); setText("un-eq-b", Kit.fmt(st.b, 2));
+      setText("un-eq-out", Kit.fmt(a, 2));
+    }
+    var uo = {
+      inputs: [{ name: "glucose, mg/dL", min: 40, max: 200, value: WA[0], digits: 0 }, { name: "BMI, kg/m²", min: 15, max: 55, value: WA[1], digits: 1 }],
+      scale: { mean: [mg[0], mb[0]], sd: [mg[1], mb[1]] }, weights: [1.5, 0.8], bias: -1, activation: "relu", wRange: 4, bRange: 6, eta: 0.5,
+      points: D.train.map(function (i) { return { x: [D.g[i], D.b[i]], y: D.y[i] }; }), classNames: ["no diabetes", "had diabetes"], probe: WA,
+      notes: {
+        none: "No activation: the output is the weighted sum itself, so the unit is a straight-line fit to the labels 0 and 1.",
+        step: "Step: the output is 1 when the weighted sum is 0 or more, and 0 otherwise.",
+        sigmoid: "Sigmoid: the output is a number between 0 and 1. With this activation the unit is a logistic regression.",
+        tanh: "tanh: like the sigmoid, but the output runs from −1 to 1 and is 0 when the weighted sum is 0.",
+        relu: "ReLU: the output is the weighted sum when it is positive and 0 otherwise, so half of the plane is flat. The deployed network uses ReLU.",
+        gelu: "GELU: a smooth version of ReLU, with a small dip below zero."
+      },
+      onChange: womanUnit
+    };
+    // The starred input is Woman A until the reader moves it.
+    Object.defineProperty(uo, "probeLabel", { enumerable: true, get: function () {
+      var x = unit ? unit.get().x : WA;
+      return Math.abs(x[0] - WA[0]) < 0.5 && Math.abs(x[1] - WA[1]) < 0.06 ? "Woman A" : "Your input";
+    } });
+    unit = NeuronLab.mount($("un-lab"), uo);
+    var back = $("un-back");
+    if (back) { back.hidden = false; back.addEventListener("click", function () { unit.set({ x: WA.slice() }); }); }
   }
 
   // ---------- 4 and 6. the rebuilt XGBoost model ----------
@@ -356,39 +349,6 @@
     return { W: W, X: X, dots: dots, cut: cut };
   }
 
-  function boost(D, S) {
-    var svg = $("bo-svg"), note = $("bo-note"), k = $("bo-k"), out = $("bo-val"), play = $("bo-play"), P = null, timer = 0;
-    function build() {
-      P = strips(svg, D); P.cut.setAttribute("stroke-dasharray", "5 4"); P.cut.setAttribute("x1", P.X(0.5)); P.cut.setAttribute("x2", P.X(0.5));
-      P.ring = el("circle", { cy: P.dots[A].getAttribute("cy"), r: 7, style: "fill:none;stroke:var(--ink)", "stroke-width": 2 }, svg);
-      P.ringA = text(svg, 0, Number(P.dots[A].getAttribute("cy")) - 9, "A", { "text-anchor": "middle", "font-size": 13, "font-weight": 600, style: "fill:var(--ink);paint-order:stroke;stroke:var(--paper);stroke-width:4px" });
-      update();
-    }
-    function update() {
-      var n = Number(k.value), s = S[n];
-      out.textContent = n;
-      for (var i in P.dots) P.dots[i].setAttribute("cx", P.X(s[i]).toFixed(1));
-      P.ring.setAttribute("cx", P.X(s[A]).toFixed(1)); P.ringA.setAttribute("x", P.X(s[A]).toFixed(1));
-      setText("bo-eq-k", n); setText("bo-eq-sum", signed(s[A] - S[0][A], 3)); setText("bo-eq-s", s[A].toFixed(3));
-      var held = D.held.filter(function (i) { return (s[i] > 0.5 ? 1 : 0) === D.y[i]; }).length;
-      var tr = D.train.filter(function (i) { return (s[i] > 0.5 ? 1 : 0) === D.y[i]; }).length;
-      var lo = Math.min.apply(null, D.held.map(function (i) { return s[i]; })), hi = Math.max.apply(null, D.held.map(function (i) { return s[i]; }));
-      note.textContent = (n === 0 ? "Before any tree, all women get the training average, 0.347, and the model calls no for all of them." : "After " + n + (n === 1 ? " tree" : " trees") + ", held-out scores run from " + lo.toFixed(2) + " to " + hi.toFixed(2) + ".")
-        + " Held-out accuracy " + pct(held / D.held.length) + ", training accuracy " + pct(tr / D.train.length) + ".";
-    }
-    function stop() { clearInterval(timer); timer = 0; play.textContent = "Play"; }
-    play.addEventListener("click", function () {
-      if (timer) { stop(); return; }
-      if (Number(k.value) >= 100) k.value = 0;
-      play.textContent = "Pause";
-      timer = setInterval(function () { k.value = Number(k.value) + 1; update(); if (Number(k.value) >= 100) stop(); }, 70);
-    });
-    k.addEventListener("input", function () { stop(); update(); });
-    build();
-    var W = P.W;
-    window.addEventListener("resize", debounce(function () { if (width(svg) !== W) { build(); W = P.W; } }));
-  }
-
   function cutoff(D, S) {
     var svg = $("co-svg"), note = $("co-note"), cut = $("co-cut"), out = $("co-val"), P = null, s = S[S.length - 1];
     function build() {
@@ -410,76 +370,6 @@
     build();
     var W = P.W;
     window.addEventListener("resize", debounce(function () { if (width(svg) !== W) { build(); W = P.W; } }));
-  }
-
-  // ---------- 5. one unit ----------
-
-  function unit(D) {
-    var svg = $("un-svg"), note = $("un-note"), W = 0, G = null;
-    var mg = D.scale.Glucose, mb = D.scale.BMI;
-    var S = {
-      wg: slider($("un-sliders"), ["wg", "Weight on glucose", -3, 3, 0.1, 1.5], update),
-      wb: slider($("un-sliders"), ["wb", "Weight on BMI", -3, 3, 0.1, 0.8], update),
-      c: slider($("un-sliders"), ["c", "Bias", -3, 3, 0.1, -1], update)
-    };
-    var gx = [40, 200], by = [15, 60], NX = 40, NY = 28;
-    function build() {
-      clear(svg);
-      W = width(svg);
-      var m = { l: 34, r: 6, t: 6, b: 40 }, H = Math.min(320, Math.max(230, W * 0.62));
-      var X = function (g) { return m.l + (W - m.l - m.r) * (g - gx[0]) / (gx[1] - gx[0]); };
-      var Y = function (b) { return H - m.b - (H - m.t - m.b) * (b - by[0]) / (by[1] - by[0]); };
-      G = { X: X, Y: Y, cells: [], m: m, H: H };
-      var cw = (W - m.l - m.r) / NX, ch = (H - m.t - m.b) / NY;
-      for (var a = 0; a < NX; a++) for (var b = 0; b < NY; b++) {
-        G.cells.push([gx[0] + (a + 0.5) * (gx[1] - gx[0]) / NX, by[0] + (b + 0.5) * (by[1] - by[0]) / NY,
-          el("rect", { x: (m.l + a * cw).toFixed(1), y: (H - m.b - (b + 1) * ch).toFixed(1), width: (cw + 0.5).toFixed(1), height: (ch + 0.5).toFixed(1) }, svg)]);
-      }
-      D.train.forEach(function (i) {
-        if (D.g[i] < gx[0] || D.b[i] < by[0] || D.b[i] > by[1]) return;
-        el("circle", { cx: X(D.g[i]).toFixed(1), cy: Y(D.b[i]).toFixed(1), r: 1.9, style: "fill:var(--" + (D.y[i] ? "coral" : "navy") + ");fill-opacity:0.7" }, svg);
-      });
-      var clip = el("clipPath", { id: "un-clip" }, el("defs", {}, svg));
-      el("rect", { x: m.l, y: m.t, width: W - m.l - m.r, height: H - m.t - m.b }, clip);
-      G.edge = el("line", { style: "stroke:var(--ink)", "stroke-width": 2, "stroke-dasharray": "5 4", "clip-path": "url(#un-clip)" }, svg);
-      markA(svg, X(D.g[A]), Y(D.b[A]));
-      [60, 100, 140, 180].forEach(function (g) { text(svg, X(g), H - m.b + 15, String(g), { "text-anchor": "middle", "font-size": 12, style: "fill:var(--muted)" }); });
-      [20, 30, 40, 50].forEach(function (b) { text(svg, m.l - 6, Y(b) + 4, String(b), { "text-anchor": "end", "font-size": 12, style: "fill:var(--muted)" }); });
-      text(svg, (m.l + W - m.r) / 2, H - 4, "glucose, mg/dL", { "text-anchor": "middle", "font-size": 13, style: "fill:var(--ink-2)" });
-      text(svg, 10, (m.t + H - m.b) / 2, "BMI", { "text-anchor": "middle", "font-size": 13, transform: "rotate(-90 10 " + ((m.t + H - m.b) / 2) + ")", style: "fill:var(--ink-2)" });
-      svg.setAttribute("viewBox", "0 0 " + W + " " + H);
-      update();
-    }
-    function out(g, b) { return S.wg.get() * (g - mg[0]) / mg[1] + S.wb.get() * (b - mb[0]) / mb[1] + S.c.get(); }
-    function update() {
-      if (!G) return;
-      var mx = 0;
-      G.cells.forEach(function (c) { mx = Math.max(mx, out(c[0], c[1])); });
-      G.cells.forEach(function (c) {
-        var v = Math.max(0, out(c[0], c[1]));
-        c[2].setAttribute("style", v > 0 ? "fill:var(--teal);fill-opacity:" + (0.08 + 0.42 * v / (mx || 1)).toFixed(2) : "fill:none");
-      });
-      // the edge where the weighted sum is zero: wg*(g-mg)/sg + wb*(b-mb)/sb + c = 0
-      var wg = S.wg.get(), wb = S.wb.get(), c = S.c.get(), pts = [];
-      if (Math.abs(wb) > 1e-6) {
-        [gx[0], gx[1]].forEach(function (g) { pts.push([g, mb[0] - mb[1] * (c + wg * (g - mg[0]) / mg[1]) / wb]); });
-      } else if (Math.abs(wg) > 1e-6) {
-        var g0 = mg[0] - mg[1] * c / wg; pts = [[g0, by[0]], [g0, by[1]]];
-      }
-      if (pts.length) {
-        G.edge.setAttribute("x1", G.X(pts[0][0])); G.edge.setAttribute("y1", G.Y(pts[0][1]));
-        G.edge.setAttribute("x2", G.X(pts[1][0])); G.edge.setAttribute("y2", G.Y(pts[1][1]));
-        G.edge.style.display = "";
-      } else G.edge.style.display = "none";
-      var sum = out(D.g[A], D.b[A]);
-      setText("un-eq-wg", wg.toFixed(1)); setText("un-eq-wb", wb.toFixed(1)); setText("un-eq-b", (c < 0 ? "−" : "") + Math.abs(c).toFixed(1));
-      setText("un-eq-out", Math.max(0, sum).toFixed(2));
-      var on = D.train.filter(function (i) { return out(D.g[i], D.b[i]) > 0; }), pos = on.filter(function (i) { return D.y[i]; }).length;
-      note.textContent = on.length ? "The unit is active for " + on.length + " of the " + D.train.length + " training women, and " + pct(pos / on.length) + " of them had diabetes, against 34.9% overall."
-        : "The unit is never active on these women, so its output is always zero.";
-    }
-    build();
-    window.addEventListener("resize", debounce(function () { if (width(svg) !== W) build(); }));
   }
 
   // ---------- 8. Shapley values in a toy with three inputs ----------
@@ -544,67 +434,6 @@
     }
     draw();
     window.addEventListener("resize", debounce(function () { if (width(svg) !== W) draw(); }));
-  }
-
-  // ---------- 5. tree depth and overfitting ----------
-
-  function depth(D) {
-    var C = D.depth, svg = $("dp-svg"), note = $("dp-note"), k = $("dp-k"), out = $("dp-val"), play = $("dp-play"), W = 0, G = null, timer = 0;
-    var N = C.train.length, base = count(D, function (i) { return D.y[i] === 0; }) / D.y.length;
-    function name(j) { return j === N - 1 ? "no limit" : String(j + 1); }
-    function build() {
-      clear(svg);
-      W = width(svg);
-      var narrow = W < 560, m = { l: 40, r: narrow ? 64 : 84, t: 12, b: 36 }, H = narrow ? 250 : 290;
-      var X = function (j) { return m.l + (W - m.l - m.r) * j / (N - 1); };
-      var Y = function (a) { return H - m.b - (H - m.t - m.b) * (a - 0.6) / 0.4; };
-      G = { X: X, Y: Y, m: m, H: H };
-      [0.6, 0.7, 0.8, 0.9, 1].forEach(function (a) {
-        el("line", { x1: m.l, x2: W - m.r, y1: Y(a), y2: Y(a), style: "stroke:var(--rule)" }, svg);
-        text(svg, m.l - 6, Y(a) + 4, Math.round(a * 100) + "%", { "text-anchor": "end", "font-size": 12, style: "fill:var(--muted)" });
-      });
-      el("line", { x1: m.l, x2: W - m.r, y1: Y(base), y2: Y(base), style: "stroke:var(--muted)", "stroke-dasharray": "4 4" }, svg);
-      text(svg, W - m.r - 4, Y(base) + 15, "always say no, " + pct(base), { "text-anchor": "end", "font-size": 12, style: "fill:var(--muted)" });
-      var band = C.hi.map(function (v, j) { return X(j).toFixed(1) + "," + Y(v).toFixed(1); })
-        .concat(C.lo.map(function (v, j) { return X(j).toFixed(1) + "," + Y(v).toFixed(1); }).reverse());
-      el("polygon", { points: band.join(" "), style: "fill:var(--coral);fill-opacity:0.12" }, svg);
-      function line(arr) { return arr.map(function (v, j) { return (j ? "L" : "M") + X(j).toFixed(1) + " " + Y(v).toFixed(1); }).join(""); }
-      el("path", { d: line(C.train), style: "fill:none;stroke:var(--navy)", "stroke-width": 2.5 }, svg);
-      el("path", { d: line(C.held), style: "fill:none;stroke:var(--coral)", "stroke-width": 2.5 }, svg);
-      text(svg, X(N - 1) + 9, Y(C.train[N - 1]) + 4, "training", { "font-size": 13, "font-weight": 600, style: "fill:var(--navy)" });
-      text(svg, X(N - 1) + 9, Y(C.held[N - 1]) + 4, "held out", { "font-size": 13, "font-weight": 600, style: "fill:var(--coral)" });
-      for (var j = 0; j < N; j++) {
-        if (narrow && j % 3 && j !== N - 1) continue;
-        text(svg, X(j), H - m.b + 16, name(j), { "text-anchor": "middle", "font-size": 12, style: "fill:var(--muted)" });
-      }
-      text(svg, (m.l + W - m.r) / 2, H - 3, "depth: questions asked in a row", { "text-anchor": "middle", "font-size": 13, style: "fill:var(--ink-2)" });
-      G.v = el("line", { y1: m.t, y2: H - m.b, style: "stroke:var(--ink)", "stroke-width": 1.5 }, svg);
-      G.dt = el("circle", { r: 5, style: "fill:var(--navy);stroke:var(--paper)", "stroke-width": 2 }, svg);
-      G.dh = el("circle", { r: 5, style: "fill:var(--coral);stroke:var(--paper)", "stroke-width": 2 }, svg);
-      svg.setAttribute("viewBox", "0 0 " + W + " " + H);
-      update();
-    }
-    function update() {
-      var j = Number(k.value) - 1, x = G.X(j);
-      out.textContent = name(j);
-      G.v.setAttribute("x1", x); G.v.setAttribute("x2", x);
-      G.dt.setAttribute("cx", x); G.dt.setAttribute("cy", G.Y(C.train[j]));
-      G.dh.setAttribute("cx", x); G.dh.setAttribute("cy", G.Y(C.held[j]));
-      var per = Math.round(D.train.length / C.leaves[j]);
-      setText("dp-eq-tr", pct(C.train[j])); setText("dp-eq-he", pct(C.held[j])); setText("dp-eq-gap", (100 * (C.train[j] - C.held[j])).toFixed(1));
-      note.textContent = (j === N - 1 ? "With no depth limit" : "At depth " + (j + 1)) + ", training accuracy is " + pct(C.train[j]) + " and held-out accuracy " + pct(C.held[j]) +
-        ". The tree has about " + C.leaves[j] + " leaves for the " + D.train.length + " training women, about " + per + " per leaf.";
-    }
-    function stop() { clearInterval(timer); timer = 0; play.textContent = "Play"; }
-    play.addEventListener("click", function () {
-      if (timer) { stop(); return; }
-      if (Number(k.value) >= N) k.value = 1;
-      play.textContent = "Pause"; update();
-      timer = setInterval(function () { k.value = Number(k.value) + 1; update(); if (Number(k.value) >= N) stop(); }, reduce ? 300 : 650);
-    });
-    k.addEventListener("input", function () { stop(); update(); });
-    build();
-    window.addEventListener("resize", debounce(function () { if (width(svg) !== W) build(); }));
   }
 
   // ---------- 8. one prediction through the deployed network ----------
@@ -794,7 +623,7 @@
   var QUIZ = [
     { q: "A model is right about nearly all the women it trained on. What does that tell you about new women?",
       o: ["It will be right about nearly all of them too.", "Little. You need to grade it on women it never saw.", "It will be right about half of them."],
-      a: 1, why: "The model has seen the answers for its training women, so its score there is too kind. The deepest tree in this primer is right about all its training women and wrong about three in ten new ones.", link: "#depth" },
+      a: 1, why: "The model has seen the answers for its training women, so its score there is too kind. A depth-12 tree on glucose and BMI is right about 93% of its training women and 73% of the held-out women.", link: "#depth" },
     { q: "After training, what does the model keep?",
       o: ["A copy of the 768 women, which it searches for the closest match.", "Rules that a programmer wrote by hand.", "A set of numbers, such as cut-offs and weights, tuned on those women."],
       a: 2, why: "Training tunes numbers: the questions and cut-offs of the trees, or the weights of the network. The women are not stored in the model.", link: "#tree" },

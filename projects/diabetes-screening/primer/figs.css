@@ -1,0 +1,23 @@
+/* Styles for the interactive figures built by TreeLab, BoostLab and NeuronLab (treelab.js, boostlab.js, neuronlab.js).
+   Copied from the How AI Learns primer kit (kit.css) and scoped to the figure containers .tl, .bl and .nl,
+   so nothing else on the page changes. Each module adds its own small stylesheet for the rest. */
+
+/* Plotly and D3 areas */
+.tl .plot, .bl .plot, .nl .plot { width: 100%; min-height: 320px; }
+.tl .plot.tall, .bl .plot.tall { min-height: 440px; }
+.tl .plot.short, .bl .plot.short { min-height: 220px; }
+
+/* Sliders and menus */
+.tl .controls, .bl .controls, .nl .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px 22px; margin: 4px 0 12px; }
+.tl .controls label, .bl .controls label, .nl .controls label { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: center; font-size: 14.5px; color: var(--ink-2); }
+.tl .controls label input[type=range], .bl .controls label input[type=range], .nl .controls label input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--teal); }
+.tl .controls output, .bl .controls output, .nl .controls output { color: var(--ink); font-feature-settings: "tnum" 1, "lnum" 1; }
+.tl .controls select, .bl .controls select, .nl .controls select { font: inherit; font-size: 14.5px; padding: 2px 6px; border: 1px solid var(--rule); border-radius: 4px; background: var(--bg); color: var(--ink); }
+
+/* Live numbers under a figure */
+.tl .readout, .bl .readout, .nl .readout { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 10px 0 0; font-size: 15px; color: var(--ink-2); }
+.tl .readout b, .bl .readout b, .nl .readout b { color: var(--ink); font-feature-settings: "tnum" 1, "lnum" 1; }
+
+@media (max-width: 760px) {
+  .tl .plot, .bl .plot, .nl .plot { min-height: 280px; }
+}

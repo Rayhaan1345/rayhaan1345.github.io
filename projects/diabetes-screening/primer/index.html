@@ -16,7 +16,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;1,400&family=Spectral+SC:wght@500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../../../assets/site.css?v=5">
 <link rel="stylesheet" href="../../../assets/project.css?v=5">
-<link rel="stylesheet" href="primer.css?v=7">
+<link rel="stylesheet" href="primer.css?v=8">
+<link rel="stylesheet" href="figs.css?v=8">
 <script>try{var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
 </head>
 <body>
@@ -162,19 +163,17 @@
     <div><dt>leaf</dt><dd>the end of a path, where the tree makes its call</dd></div>
     <div><dt>depth</dt><dd>how many questions the tree asks in a row</dd></div>
     <div><dt>training</dt><dd>searching for the questions that sort the training women best</dd></div>
+    <div><dt>Gini impurity</dt><dd>how mixed a box is: 0 when all its women share one label, 0.5 when the labels split half and half</dd></div>
   </dl>
   <p class="claim">A tree chains questions, and training it means searching for the questions that sort the training women best.</p>
-  <div class="card" id="tr">
-    <svg id="tr-svg" role="img" aria-label="Glucose and BMI of the training women, divided into four boxes by a small decision tree"></svg>
-    <div class="sliders tree-sliders" id="tr-sliders"></div>
-    <div class="bar" style="margin:12px 0 0"><button type="button" class="btn" id="tr-fit">Let the computer choose</button></div>
-    <ul class="leaves" id="tr-leaves" aria-live="polite"></ul>
-    <p class="status" id="tr-note"></p>
-  </div>
-  <p class="cap"><b>A tree with two questions splits the plot into four boxes, and the box decides the call.</b></p>
-  <p>This tree asks about glucose first and BMI second. Coral dots had diabetes and navy dots did not. A box turns coral when most of its training women had diabetes, and the number in a box is that share. Press "Let the computer choose" to run the search that training performs.</p>
-  <p>Where does Woman A go? Her glucose of 158 and BMI of 31.6 put her in one box, marked A. The share of training women with diabetes in that box decides her call:</p>
-  <div class="eqn" role="img" aria-label="Share with diabetes in Woman A's box equals women with diabetes in the box divided by all women in the box"><span class="t"><b>share in her box</b><i id="tr-eq-box"></i></span><span class="op">=</span><span class="t c-coral"><b id="tr-eq-a">118</b><i>had diabetes</i></span><span class="op">&divide;</span><span class="t"><b id="tr-eq-n">163</b><i>women in the box</i></span><span class="op">=</span><span class="t c-coral"><b id="tr-eq-s">72%</b><i id="tr-eq-call">more than half: call yes</i></span></div>
+  <div class="card tl" id="tr-lab"></div>
+  <p class="cap"><b>A tree grows by cutting one box in two at a time, and a box turns coral when most of its training women had diabetes.</b></p>
+  <p>Start with one box of all 614 training women. Choose glucose or BMI, drag the line to a cut-off, and press "Split here". Click a box, on the plot or in the tree, to choose the next box to cut. Coral diamonds had diabetes, navy circles did not, and the star is Woman A. The plot draws the training women. "Show held-out" adds the 154 held-out women as open symbols, and the readouts under the figure give the accuracy on both groups.</p>
+  <p>Now press "Let the computer choose" to run the search that training performs. It tries all cut-offs of glucose and of BMI in the chosen box. It scores them by the Gini impurity of the two new boxes, weighted by their size, and moves the line to the lowest score. For the first box it picks glucose at most 127.5, which lowers the weighted Gini from 0.453 to 0.373. The small charts plot the scores of all cut-offs.</p>
+  <p class="task"><b>Try this.</b> Cut the plot into four boxes by hand, then compare your weighted Gini with the computer's best for four boxes in the last readout. The search looks one cut ahead, so a patient reader sometimes wins.</p>
+  <p>Where does Woman A go? Her glucose of 158 and BMI of 31.6 put her in one box, and the share of training women with diabetes in that box decides her call. With no cut yet her box is the whole group, so the share is 35% and the call is no. Cut the plot and watch her box change. Suppose the computer cuts the whole group at glucose 127.5, then the high-glucose box at BMI 29.95. Her box then has 163 women, and 118 of them, 72%, had diabetes:</p>
+  <div class="eqn" role="img" aria-label="Share with diabetes in Woman A's box equals women with diabetes in the box divided by all women in the box"><span class="t"><b>share in her box</b><i id="tr-eq-box">no question yet, so all training women</i></span><span class="op">=</span><span class="t c-coral"><b id="tr-eq-a">213</b><i>had diabetes</i></span><span class="op">&divide;</span><span class="t"><b id="tr-eq-n">614</b><i>women in the box</i></span><span class="op">=</span><span class="t c-coral"><b id="tr-eq-s">35%</b><i id="tr-eq-call">half or less: call no</i></span></div>
+  <p class="more">For Gini impurity worked out by hand, and the greedy search written in code, see <a href="https://mailab.in/primer/a5-decision-trees/">A5, Decision trees</a>, in the How AI Learns primer.</p>
   <div class="break">
     <p><b>Analogy.</b> A tree resembles a game of twenty questions.</p>
     <p><b>Where it breaks.</b> In the game you pick the next question as you go. A tree's questions are fixed when training ends, and it asks all women the same questions in the same order.</p>
@@ -191,26 +190,25 @@
   <p class="ask"><b>Guess first.</b> You let the tree ask ten questions in a row instead of two. Will it do better on new women?</p>
   <dl class="terms">
     <div><dt>overfitting</dt><dd>learning quirks of the training women that new women do not share</dd></div>
+    <div><dt>smallest box</dt><dd>the fewest women a box may contain, which stops a tree from cutting out single women</dd></div>
   </dl>
   <p class="claim">Past a few questions, a deeper tree keeps improving on its training women and gets worse on new ones.</p>
-  <div class="card" id="dp">
-    <label class="range-row">Depth <input type="range" id="dp-k" min="1" max="13" step="1" value="2"><output id="dp-val">2</output> <button type="button" class="btn" id="dp-play">Play</button></label>
-    <svg id="dp-svg" role="img" aria-label="Training and held-out accuracy of a decision tree as its depth grows"></svg>
-    <p class="status" id="dp-note" aria-live="polite"></p>
-  </div>
-  <p class="cap"><b>Training accuracy climbs to 100% as the tree deepens, while held-out accuracy drifts down from its peak near depth 2.</b></p>
-  <p>These trees use all eight measurements. A deep tree carves the women into many small boxes. With no depth limit it makes about 109 leaves for 614 women, about six women per leaf, so it has in effect memorised them. The curves average 50 random splits, because one held-out set of 154 women is noisy. The band shows where most of those splits fall.</p>
-  <div class="eqn" role="img" aria-label="The gap equals training accuracy minus held-out accuracy"><span class="t c-navy"><b id="dp-eq-tr">76.7%</b><i>training</i></span><span class="op">&minus;</span><span class="t c-coral"><b id="dp-eq-he">74.7%</b><i>held out</i></span><span class="op">=</span><span class="t"><b id="dp-eq-gap">2.0</b><i>gap, in points</i></span></div>
-  <p>The gap is the clearest sign of overfitting. It stays small for shallow trees and grows to about 30 points with no depth limit.</p>
+  <div class="card tl" id="dp-lab"></div>
+  <p class="cap"><b>As the depth limit rises the boxes shrink and the training accuracy climbs, while the average held-out accuracy peaks at depth 3 and then falls.</b></p>
+  <p>These trees ask about glucose and BMI only, the two measurements of the last figure, and they grow by the same search. Drag the depth limit, or press Play to deepen the tree one level at a time. The boxes shrink until a box has a handful of women, and the training accuracy climbs from 77.2% at depth 2 to 93.2% at depth 12. The coral curve is the held-out accuracy of the project's split, and it is jumpy because 154 women are few. The dashed curve averages 50 other random splits of the 768 women. It peaks at 74.4% at depth 3 and falls to 68.1% at depth 12.</p>
+  <div class="eqn" role="img" aria-label="The gap equals training accuracy minus held-out accuracy"><span class="t c-navy"><b id="dp-eq-tr">77.2%</b><i>training</i></span><span class="op">&minus;</span><span class="t c-coral"><b id="dp-eq-he">77.3%</b><i>held out</i></span><span class="op">=</span><span class="t"><b id="dp-eq-gap">&minus;0.1</b><i>gap, in points</i></span></div>
+  <p>The gap is the clearest sign of overfitting. It is near zero for shallow trees and reaches 19.8 points at depth 12. With all eight measurements it grows to about 30 points. Averaged over 50 random splits, that tree reaches 100% on its training women with no depth limit, while its held-out accuracy peaks at 74.7% at depth 2 and falls to 70.6%.</p>
+  <p class="task"><b>Try this.</b> Set the depth limit to 12, then raise the smallest box from 1 to 30 women. The tree falls from 130 boxes to 15. Its training accuracy drops to 77.7% and its held-out accuracy rises to 77.3%, so the gap closes.</p>
+  <p class="more">For depth, smallest boxes and held-out sets in more detail, see <a href="https://mailab.in/primer/a5-decision-trees/">A5, Decision trees</a>, in the How AI Learns primer.</p>
   <div class="break">
     <p><b>Common belief.</b> A model that is right about nearly all its training women will be right about new women too.</p>
-    <p><b>Why it fails.</b> The deepest tree is right about all its training women and wrong about three in ten new ones.</p>
+    <p><b>Why it fails.</b> A depth-12 tree on these two measurements is right about 93% of its training women and 73% of the held-out women. With all eight measurements and no depth limit it is right about all its training women and wrong about three in ten new ones.</p>
     <p><b>Better account.</b> Pick settings such as depth with women the model did not train on, and report the grade on the held-out set.</p>
   </div>
   <div class="recall">
     <p class="recall-h">Quick quiz</p>
     <details><summary>What is overfitting?</summary><p>Learning quirks of the training women that new women do not share. Training accuracy rises while held-out accuracy falls.</p></details>
-    <details><summary>Which depth would you pick from the figure, and why?</summary><p>About two or three, where held-out accuracy peaks. Deeper trees only raise the training score.</p></details>
+    <details><summary>Which depth would you pick from the figure, and why?</summary><p>About two or three, where the average held-out accuracy peaks. Deeper trees only raise the training score.</p></details>
   </div>
 </section>
 
@@ -220,20 +218,22 @@
   <dl class="terms">
     <div><dt>boosting</dt><dd>adding small trees one after another, with a new tree reducing the errors left so far</dd></div>
     <div><dt>learning rate</dt><dd>how far a new tree moves the scores</dd></div>
+    <div><dt>stump</dt><dd>a tree with a single question</dd></div>
+    <div><dt>leaf penalty</dt><dd>a number added to a leaf's count, which shrinks the answer of a leaf with few women</dd></div>
     <div><dt>XGBoost</dt><dd>a popular library for boosting</dd></div>
   </dl>
   <p class="claim">Boosting builds a strong model from many weak trees by letting a new tree correct what the earlier trees got wrong.</p>
-  <div class="card" id="bo">
-    <label class="range-row">Trees <input type="range" id="bo-k" min="0" max="100" step="1" value="0"><output id="bo-val">0</output> <button type="button" class="btn" id="bo-play">Play</button></label>
-    <svg id="bo-svg" role="img" aria-label="Scores of the held-out women after the chosen number of trees"></svg>
-    <p class="status" id="bo-note" aria-live="polite"></p>
-  </div>
-  <p class="cap"><b>As trees are added, women with diabetes drift right and women without drift left.</b></p>
-  <p>How does a new tree know what to fix? It looks at the gap between a woman's label and her current score. Before any tree, all women score 0.347, the training average. A woman with diabetes has a gap of 1 &minus; 0.347 = 0.653, and a woman without has a gap of &minus;0.347. The new tree sorts the training women into leaves, and a leaf moves its women's scores by a small part of their average gap:</p>
-  <div class="eqn" role="img" aria-label="New score equals old score plus the learning rate times the average gap in the woman's leaf"><span class="t"><b>new score</b></span><span class="op">=</span><span class="t"><b>old score</b></span><span class="op">+</span><span class="t c-teal"><b>0.01</b><i>learning rate</i></span><span class="op">&times;</span><span class="t c-coral"><b>average gap</b><i>in her leaf</i></span></div>
-  <p>That is a slightly simplified picture, since XGBoost also shrinks the step in leaves with few women. The model rebuilt from the project report uses 100 trees of depth 3. Press Play to add trees, and follow Woman A, the ringed dot in the top row:</p>
+  <div class="card bl" id="bo1-lab"></div>
+  <p class="cap"><b>With glucose alone, the staircase of scores climbs as stumps are added and follows the share of women with diabetes at that glucose. The gaps in the lower plot cannot vanish, because a label is either 0 or 1.</b></p>
+  <p>How does a new tree know what to fix? It looks at the gap between a woman's label and her current score. Before any tree, all women score 0.347, the training average. A woman with diabetes has a gap of 1 &minus; 0.347 = 0.653, and a woman without has a gap of &minus;0.347. The lower plot shows these two rows of gaps. A new stump sorts the training women into two leaves by their glucose. A leaf answers with the sum of its women's gaps divided by their number plus the leaf penalty, which is close to their average gap when the leaf is large. The score then moves by a small part of that answer, set by the learning rate:</p>
+  <div class="eqn" role="img" aria-label="New score equals old score plus the learning rate times the leaf's answer"><span class="t"><b>new score</b></span><span class="op">=</span><span class="t"><b>old score</b></span><span class="op">+</span><span class="t c-teal"><b>&eta;</b><i>learning rate</i></span><span class="op">&times;</span><span class="t c-coral"><b>leaf answer</b><i>close to the average gap in her leaf</i></span></div>
+  <p>Press Step or Play, and pick Woman A, B or C under "Equation boxes follow". The boxes under the plots give that woman's gap, her leaf's answer and her new score, tree by tree. Woman A had diabetes and Woman B did not, so their gaps start with opposite signs.</p>
+  <div class="card bl" id="bo2-lab"></div>
+  <p class="cap"><b>At a learning rate of 0.01 the scores move slowly. The 0.5 line first appears after 34 trees, and after 100 trees the two-input model is right for 74.0% of the held-out women.</b></p>
+  <p>Now glucose and BMI work together, with the settings of the project's model: trees of depth 3, a learning rate of 0.01, a leaf penalty of 1 and 100 trees. The project's model also reads six more measurements, so this is a two-input version and its numbers differ. Press Play and watch the map of scores sharpen. The black line is where the score reaches 0.5, the cut-off for calling diabetes. Follow Woman A, the star on the map:</p>
   <div class="eqn" role="img" aria-label="Woman A's score equals the starting score plus the sum of the trees' steps"><span class="t"><b>Woman A's score</b><i>after <span id="bo-eq-k">0</span> trees</i></span><span class="op">=</span><span class="t"><b>0.347</b><i>start</i></span><span class="op">+</span><span class="t c-teal"><b id="bo-eq-sum">+0.000</b><i>sum of the trees' steps</i></span><span class="op">=</span><span class="t c-coral"><b id="bo-eq-s">0.347</b><i>her score</i></span></div>
-  <p>With a learning rate this small, the scores spread slowly and end between about 0.15 and 0.70.</p>
+  <p>With a learning rate this small, the scores spread slowly. After 100 trees Woman A's score is 0.594, and the held-out scores run from 0.14 to 0.69. The project's model with eight inputs ends between about 0.15 and 0.70. Raise the learning rate to 0.1 and the map sharpens within about ten trees, but the scores overshoot, running from &minus;0.02 to 1.13 after 100 trees.</p>
+  <p class="more">For boosting on residuals step by step, the leaf penalty and four ways to ask which inputs matter, see <a href="https://mailab.in/primer/a6-boosting/">A6, Ensembles and boosting</a>, in the How AI Learns primer.</p>
   <div class="break">
     <p><b>Analogy.</b> Boosting resembles a row of editors passing a draft along, with the next editor fixing what the last one missed.</p>
     <p><b>Where it breaks.</b> An editor can rewrite a whole sentence. A tree only shifts scores by a small step set by the learning rate, so no single tree fixes much.</p>
@@ -252,28 +252,28 @@
     <div><dt>unit</dt><dd>the building block of a neural network</dd></div>
     <div><dt>weight</dt><dd>how strongly a unit counts one input</dd></div>
     <div><dt>bias</dt><dd>a number added at the end, which shifts where the unit switches on</dd></div>
+    <div><dt>activation</dt><dd>the function a unit applies to its weighted sum, which sets how the output follows the sum</dd></div>
     <div><dt>ReLU</dt><dd>keep a positive sum, turn a negative sum into zero</dd></div>
   </dl>
-  <p class="claim">A unit with two inputs splits the plot along a straight line: active on one side, zero on the other.</p>
-  <div class="card" id="un">
-    <div class="unit-grid">
-      <div class="sliders" id="un-sliders"></div>
-      <svg id="un-svg" role="img" aria-label="Where a single unit is active on the glucose and BMI plot"></svg>
-    </div>
-    <p class="status" id="un-note" aria-live="polite"></p>
-  </div>
-  <p class="cap"><b>The weights tilt the dashed line and the bias moves it, and darker teal marks a larger output.</b></p>
-  <p>The inputs are scaled first, so that glucose and BMI have similar sizes. Here is Woman A's glucose, marked A on the plot:</p>
+  <p class="claim">A unit with two inputs splits the plot along a straight line, and its activation decides what the output does on either side.</p>
+  <div class="card nl" id="un-lab"></div>
+  <p class="cap"><b>The weights tilt the dashed line where the weighted sum is zero, the bias moves it, and the activation sets how the output grows away from it. Coral marks a high output, navy a low one, and the star is the input being read.</b></p>
+  <p>The inputs are scaled first, so that glucose and BMI have similar sizes. Here is Woman A's glucose, the star at the start:</p>
   <div class="eqn" role="img" aria-label="Scaled glucose equals her glucose minus the training average, divided by the spread"><span class="t"><b>scaled glucose</b></span><span class="op">=</span><span class="op">(</span><span class="t"><b>158</b><i>her glucose</i></span><span class="op">&minus;</span><span class="t"><b>120.9</b><i>training average</i></span><span class="op">)</span><span class="op">&divide;</span><span class="t"><b>32.0</b><i>spread</i></span><span class="op">=</span><span class="t c-navy"><b>1.16</b></span></div>
-  <p>Her BMI of 31.6 is close to the training average of 32.0, so it scales to &minus;0.05. The unit then weighs the two, adds the bias and applies ReLU:</p>
-  <div class="eqn" role="img" aria-label="Output equals ReLU of weight times scaled glucose plus weight times scaled BMI plus bias"><span class="t c-teal"><b id="un-eq-out">0.70</b><i>her output</i></span><span class="op">=</span><span class="op">ReLU(</span><span class="t"><b id="un-eq-wg">1.5</b><i>weight</i></span><span class="op">&times;</span><span class="t c-navy"><b>1.16</b><i>glucose</i></span><span class="op">+</span><span class="t"><b id="un-eq-wb">0.8</b><i>weight</i></span><span class="op">&times;</span><span class="t c-navy"><b>&minus;0.05</b><i>BMI</i></span><span class="op">+</span><span class="t"><b id="un-eq-b">&minus;1.0</b><i>bias</i></span><span class="op">)</span></div>
-  <p>Move the sliders and watch her output change. A larger weight on glucose makes the unit care more about glucose, which tilts the line. When the sum inside the brackets turns negative, ReLU outputs zero and the unit is off for her.</p>
+  <p>Her BMI of 31.6 is close to the training average of 32.0, so it scales to &minus;0.05. The unit then weighs the two, adds the bias and applies its activation, which starts as ReLU:</p>
+  <div class="eqn" role="img" aria-label="Output equals the activation of weight times scaled glucose plus weight times scaled BMI plus bias"><span class="t c-teal"><b id="un-eq-out">0.70</b><i>her output</i></span><span class="op">=</span><span class="op" id="un-eq-g">ReLU(</span><span class="t"><b id="un-eq-wg">1.50</b><i>weight</i></span><span class="op">&times;</span><span class="t c-navy"><b>1.16</b><i>glucose</i></span><span class="op">+</span><span class="t"><b id="un-eq-wb">0.80</b><i>weight</i></span><span class="op">&times;</span><span class="t c-navy"><b>&minus;0.05</b><i>BMI</i></span><span class="op">+</span><span class="t"><b id="un-eq-b">&minus;1.00</b><i>bias</i></span><span class="op">)</span></div>
+  <p>Move the sliders and watch her output change. A larger weight on glucose makes the unit care more about glucose, which tilts the line. When the sum inside the brackets turns negative, ReLU outputs zero and the unit is off for her. This equation always follows Woman A. The star and the boxes inside the figure follow the input sliders, or a click on the map, so press the button to bring the star back to her.</p>
+  <p><button type="button" class="btn" id="un-back" hidden>Put the star back on Woman A</button></p>
+  <p>The menu offers six activations. With none, the output is the weighted sum itself. A step gives 1 when the sum is 0 or more and 0 otherwise. A sigmoid squashes the sum into a number between 0 and 1, and tanh into a number between &minus;1 and 1. ReLU keeps a positive sum and turns a negative one into 0, and GELU is a smooth version of ReLU. The left plot draws the chosen curve in navy and its slope as a dashed sand curve, with the star's sum marked on both.</p>
+  <p>The dots on the map are the 614 training women, and a ringed dot is a woman the unit calls wrongly. The readout counts the women called correctly, and always answering no is right for 65.3% of them. Press Train and the computer nudges the three dials to cut the error, the way the next section describes for the whole network. With a sigmoid the dials settle near 1.11, 0.65 and &minus;0.83, and the unit calls 468 of the 614 women correctly, 76.2%. Reset the dials and train with the other activations. They end between 75.7% and 76.9%, and the step wobbles around the same level. The choice changes little here, because a unit with two inputs draws only one straight line.</p>
   <p class="task"><b>Try this.</b> Set the weight on BMI to 0. What happens to the line, and why?</p>
   <details class="task-a"><summary>Answer</summary><p>The line turns vertical. The unit now ignores BMI, so only glucose decides whether it switches on.</p></details>
+  <p class="more">For the full neuron playground, the perceptron rule and a layer of neurons, see <a href="https://mailab.in/primer/b1-one-neuron/">B1, One neuron</a>, in the How AI Learns primer.</p>
   <div class="recall">
     <p class="recall-h">Quick quiz</p>
     <details><summary>What does ReLU do?</summary><p>It passes a positive sum on and turns a negative sum into zero.</p></details>
     <details><summary>What changes when you change the bias?</summary><p>The line moves without tilting.</p></details>
+    <details><summary>What changes when you swap the activation?</summary><p>How the output follows the weighted sum. The line where the sum is zero stays where it is.</p></details>
   </div>
 </section>
 
@@ -454,9 +454,15 @@
 </footer>
 
 </main>
+<script src="https://cdn.jsdelivr.net/npm/plotly.js-cartesian-dist-min@2.35.2/plotly-cartesian.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js" defer></script>
+<script src="kit-lite.js?v=8" defer></script>
+<script src="treelab.js?v=8" defer></script>
+<script src="boostlab.js?v=8" defer></script>
+<script src="neuronlab.js?v=8" defer></script>
 <script src="../../../assets/site.js?v=5" defer></script>
 <script src="../xgb.js?v=5" defer></script>
 <script src="../net.js?v=5" defer></script>
-<script src="primer.js?v=7" defer></script>
+<script src="primer.js?v=8" defer></script>
 </body>
 </html>
