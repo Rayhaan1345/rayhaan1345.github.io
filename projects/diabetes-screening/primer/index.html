@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Primer: Diabetes Risk Models | Rayhaan Khan</title>
+<meta name="description" content="A step-by-step guide to the ideas behind the diabetes screening project: held-out data, rules and decision trees, boosting, neural networks for tables, cut-offs and feature importance, with interactive figures.">
+<meta name="author" content="Rayhaan Khan">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Primer: how a model turns measurements into a risk score">
+<meta property="og:description" content="The ideas behind the diabetes screening project, built up step by step with interactive figures.">
+<meta property="og:url" content="https://rayhaan1345.github.io/projects/diabetes-screening/primer/">
+<link rel="icon" href="../../../favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;1,400&family=Spectral+SC:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../../assets/site.css?v=5">
+<link rel="stylesheet" href="../../../assets/project.css?v=5">
+<link rel="stylesheet" href="primer.css?v=5">
+<script>try{var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+</head>
+<body>
+<main class="proj">
+
+<p class="crumbs"><a href="../../../">Rayhaan Khan</a> &middot; <a href="../../../#research">Research</a> &middot; <a href="../">Diabetes Risk Screening</a></p>
+
+<header class="hero">
+  <h1>Primer: how a model turns measurements into a risk score</h1>
+  <p class="subtitle">The ideas behind the diabetes project, one step at a time</p>
+  <ul class="pills">
+    <li><a href="../">Project page</a></li>
+    <li><a href="#check">Check yourself</a></li>
+  </ul>
+</header>
+
+<div class="tldr">
+  <p>This page starts from the question a doctor might ask and builds up to the two models in the project: a boosted set of decision trees and a small neural network. It then covers how to turn a score into a decision and how to tell which measurements a model relies on.</p>
+  <p>The figures use the project's dataset of 768 women, and most of them respond when you drag or click. No maths beyond averages is needed until the later sections, and new terms are explained where they first appear.</p>
+</div>
+
+<nav class="toc" aria-label="Contents">
+  <ol>
+    <li><a href="#question">The question and the base rate</a></li>
+    <li><a href="#rule">One rule</a></li>
+    <li><a href="#tree">Decision trees</a></li>
+    <li><a href="#boost">Boosting: many small trees</a></li>
+    <li><a href="#network">A neural network for tables</a></li>
+    <li><a href="#cutoff">From a score to a decision</a></li>
+    <li><a href="#measure">Measuring a model fairly</a></li>
+    <li><a href="#importance">Which inputs matter</a></li>
+    <li><a href="#check">Check yourself</a></li>
+  </ol>
+</nav>
+
+<section id="question" aria-labelledby="question-h">
+  <h2 id="question-h">The question and the base rate</h2>
+  <p>A clinic measures glucose, BMI, blood pressure and a few other things. Can those numbers flag a woman who has diabetes? A model is a recipe that turns the measurements into a score. A cut-off then turns the score into a yes or a no.</p>
+  <p>Before building any model, look at the base rate. In the dataset, 268 of the 768 women had diabetes, which is 34.9%. A lazy model that always answers "no diabetes" is right for the other 65.1%. A useful model has to beat that number.</p>
+  <p>A model learns from examples where the answer is known. The risk is a model that memorises those examples and then fails on new people. So the data is split before any learning. The model learns from the training set and is graded on the held-out set, which it never sees while learning. This project uses the common 80/20 split: 614 women for training and 154 held out.</p>
+  <div class="card" id="wf">
+    <div class="bar"><div class="group" role="group" aria-label="View" id="wf-views"></div></div>
+    <svg id="wf-svg" role="img" aria-label="The 768 women as squares"></svg>
+    <p class="status" id="wf-note" aria-live="polite"></p>
+  </div>
+  <p class="cap"><b>The dataset as 768 squares, one per woman.</b> The split view moves 154 of them into a held-out group. Both groups keep roughly the same share of women with diabetes.</p>
+</section>
+
+<section id="rule" aria-labelledby="rule-h">
+  <h2 id="rule-h">One rule</h2>
+  <p>The simplest model is a single rule: call diabetes when glucose is above a cut-off. Drag the line, or use the slider, and watch four counts change. They are the four outcomes of any yes-or-no test.</p>
+  <div class="card" id="rl">
+    <svg id="rl-svg" role="img" aria-label="Glucose histogram of the training women with a movable cut-off"></svg>
+    <label class="range-row">Cut-off <input type="range" id="rl-cut" min="60" max="199" step="1" value="160"><output id="rl-val">160</output> mg/dL</label>
+    <div class="counts" id="rl-counts"></div>
+    <p class="status" id="rl-note" aria-live="polite"></p>
+  </div>
+  <p class="cap"><b>Glucose of the 614 training women.</b> Bars above the axis count women with diabetes and bars below count women without. The shaded side of the line is called diabetes. The best cut-off on the training women is 144 mg/dL, and it gets 75.3% of the held-out women right. One rule already does most of the work.</p>
+  <p>Moving the line left catches more women with diabetes and raises more false alarms. Moving it right does the reverse. For screening, a missed case usually costs more than a false alarm, which argues for a lower cut-off than the one with the best accuracy.</p>
+</section>
+
+<section id="tree" aria-labelledby="tree-h">
+  <h2 id="tree-h">Decision trees</h2>
+  <p>A decision tree chains rules. It asks one question, then a follow-up question that depends on the first answer. The end of a path is called a leaf. A leaf's score is the share of training women in it who had diabetes, and the leaf calls diabetes when that share is above one half.</p>
+  <p>The tree below asks about glucose first and BMI second, so it cuts the plot into four boxes. Move the three questions, or let the computer search for the best ones. That search is what "training" a tree means.</p>
+  <div class="card" id="tr">
+    <svg id="tr-svg" role="img" aria-label="Glucose and BMI of the training women, divided into four boxes by a small decision tree"></svg>
+    <div class="sliders tree-sliders" id="tr-sliders"></div>
+    <div class="bar" style="margin:12px 0 0"><button type="button" class="btn" id="tr-fit">Let the computer choose</button></div>
+    <ul class="leaves" id="tr-leaves" aria-live="polite"></ul>
+    <p class="status" id="tr-note"></p>
+  </div>
+  <p class="cap"><b>A tree of depth 2 on the training women.</b> Coral dots had diabetes and navy dots did not. A box is tinted coral when its leaf calls diabetes. The search picks the questions with the best training accuracy, and the held-out accuracy shows whether that choice works on new women.</p>
+</section>
+
+<section id="boost" aria-labelledby="boost-h">
+  <h2 id="boost-h">Boosting: many small trees</h2>
+  <p>One small tree is a rough guide. Boosting builds many small trees in a row. A new tree looks at the errors left by the trees before it and nudges the scores to shrink them. The learning rate sets the size of a nudge. A small learning rate means many careful steps.</p>
+  <p>XGBoost is a popular library for boosting. The model rebuilt from the report uses 100 trees of depth 3 and a learning rate of 0.01. It starts all women at the training average, 0.347, and the trees move their scores from there. Slide through the trees, or press Play.</p>
+  <div class="card" id="bo">
+    <label class="range-row">Trees <input type="range" id="bo-k" min="0" max="100" step="1" value="0"><output id="bo-val">0</output> <button type="button" class="btn" id="bo-play">Play</button></label>
+    <svg id="bo-svg" role="img" aria-label="Scores of the held-out women after the chosen number of trees"></svg>
+    <p class="status" id="bo-note" aria-live="polite"></p>
+  </div>
+  <p class="cap"><b>Scores of the 154 held-out women as trees are added.</b> The top row had diabetes and the bottom row did not. The dashed line is the cut-off of 0.5. With a learning rate of 0.01 the scores spread slowly, and after 100 trees they run from about 0.15 to 0.70.</p>
+</section>
+
+<section id="network" aria-labelledby="network-h">
+  <h2 id="network-h">A neural network for tables</h2>
+  <p>The deployed app uses a different kind of model: a small neural network built with the fastai library. Its building block is the unit. A unit multiplies its inputs by weights, adds them up with a bias, and passes the result on if it is positive. Otherwise it outputs zero. This rule is called ReLU.</p>
+  <p>A unit with two inputs draws a straight line across the plot. On one side it is active, and on the other it outputs zero. Try the weights below on glucose and BMI.</p>
+  <div class="card" id="un">
+    <div class="unit-grid">
+      <div class="sliders" id="un-sliders"></div>
+      <svg id="un-svg" role="img" aria-label="Where a single unit is active on the glucose and BMI plot"></svg>
+    </div>
+    <p class="status" id="un-note" aria-live="polite"></p>
+  </div>
+  <p class="cap"><b>One unit on scaled glucose and BMI.</b> Scaling subtracts the training average and divides by the spread, so both inputs are on a similar scale. The shaded side is where the unit is active, and darker shading means a larger output.</p>
+  <p>The deployed network has a first layer of 200 units and a second of 100. A unit in the second layer works on the outputs of the first, so it can respond to bends and corners made from many lines. A final unit combines the second layer into one number. A squashing function, the sigmoid, maps that number into the range 0 to 1.2.</p>
+  <p>Age and the number of pregnancies enter differently. The network treats them as categories and learns a short list of numbers for an age, called an embedding. Nearby ages can end up with similar lists, but only if the data teaches it, and an age missing from the training data gets a shared "unknown" list.</p>
+  <p>Training adjusts all 27,452 numbers in the network. The error is the average squared gap between the score and the answer, 0 or 1. Training works out how the error changes when a weight changes, which is the gradient, and moves all weights a small step downhill. One pass through the training data is an epoch. This model trained for 11 epochs, in batches of 128 women.</p>
+  <p>You can watch the units of the deployed network respond in the <a href="../#try">Try the model</a> section of the project page.</p>
+</section>
+
+<section id="cutoff" aria-labelledby="cutoff-h">
+  <h2 id="cutoff-h">From a score to a decision</h2>
+  <p>Both models give a score, and a cut-off turns it into a call. Training pushed scores toward 1 for diabetes and toward 0 for none. A score of 0.6 still does not mean a 60% chance. Checking whether scores match the rates seen in the data is called calibration, and this project did not check it.</p>
+  <p>Two rates describe a screening test better than accuracy alone. Sensitivity is the share of women with diabetes that the test catches. Specificity is the share of women without diabetes that it correctly clears. Move the cut-off for the rebuilt XGBoost model and watch them trade off.</p>
+  <div class="card" id="co">
+    <label class="range-row">Cut-off <input type="range" id="co-cut" min="0.15" max="0.7" step="0.01" value="0.5"><output id="co-val">0.50</output></label>
+    <svg id="co-svg" role="img" aria-label="Held-out scores with a movable cut-off"></svg>
+    <div class="counts" id="co-counts"></div>
+    <p class="status" id="co-note" aria-live="polite"></p>
+  </div>
+  <p class="cap"><b>The rebuilt model on the 154 held-out women.</b> Lowering the cut-off raises sensitivity and lowers specificity. The right balance depends on the cost of a missed case against the cost of a follow-up test.</p>
+</section>
+
+<section id="measure" aria-labelledby="measure-h">
+  <h2 id="measure-h">Measuring a model fairly</h2>
+  <p>Accuracy on the training data flatters a model, because it has seen those answers. A deep tree can score close to 100% on its training set by carving a box around a few women at a time. Its held-out accuracy would drop, and that gap is called overfitting.</p>
+  <p>The report gave accuracy on the whole dataset, which mixes training and held-out women, so it overstates how the model would do on new patients. The fix is to set aside the held-out set at the start and to report accuracy on it alone.</p>
+  <p>The data has a second trap. Several columns use 0 for a value that was never measured: insulin is 0 for 374 women and skin fold for 227. A model that reads those zeros as low values learns from a recording habit. The usual remedy is to mark them as missing and let the model treat "missing" as its own case.</p>
+  <p>The dataset covers women of Pima heritage aged 21 or older. A model trained on it may not transfer to men, to younger people or to other populations, whose measurements and base rates differ. This is called dataset shift.</p>
+</section>
+
+<section id="importance" aria-labelledby="importance-h">
+  <h2 id="importance-h">Which inputs matter</h2>
+  <p>Feature importance asks which inputs a model relies on. The project page compares four measures on the rebuilt XGBoost model:</p>
+  <ul class="plain">
+    <li><b>Split count.</b> How often the trees ask about an input. The report's chart, called the F-score, uses this.</li>
+    <li><b>Gain.</b> How much the splits on an input reduce the training error.</li>
+    <li><b>Shuffle test.</b> How much held-out accuracy drops when an input's column is shuffled, which breaks its link to the outcome.</li>
+    <li><b>SHAP.</b> How large an input's share of a score is, on average.</li>
+  </ul>
+  <p>SHAP values come from Shapley values in game theory. Picture the inputs as players who join a team in some order, and the score as the prize. An input's Shapley value is its average added effect over all the orders in which the players could join. The toy below uses three inputs and made-up numbers so that the arithmetic stays visible.</p>
+  <div class="card" id="sv">
+    <div class="sv-grid">
+      <table class="sv-table" id="sv-values"></table>
+      <table class="sv-table" id="sv-orders"></table>
+    </div>
+    <svg id="sv-svg" role="img" aria-label="The score built up input by input in the chosen order"></svg>
+    <p class="status" id="sv-note" aria-live="polite"></p>
+  </div>
+  <p class="cap"><b>Shapley values in a toy with three inputs.</b> The left table gives the score for any set of known inputs, and the empty set gives the average score. Click an order to build the score in that order. The bottom row averages the six orders. The three averages add up to the gap between the full score and the average.</p>
+  <p>For trees, an algorithm called TreeSHAP computes these averages over all orders without listing them, so it stays fast with eight inputs. The project page runs it in your browser in <a href="../#explain">Explain one score</a>, and the shuffle test in <a href="../#shuffle">The shuffle test</a>.</p>
+</section>
+
+<section id="check" aria-labelledby="check-h">
+  <h2 id="check-h">Check yourself</h2>
+  <p>Questions an interviewer might ask about this project, with short answers. Try to answer before opening one.</p>
+  <div class="qa">
+    <details><summary>Why hold out a test set before training?</summary><p>The model has seen the training answers, so its training accuracy is too optimistic. A held-out set gives an estimate of how the model would do on new people. It must stay untouched while choosing settings, or it stops being a fair test.</p></details>
+    <details><summary>What does a learning rate do in boosting?</summary><p>It scales the nudge that a new tree adds to the scores. A small rate needs more trees but tends to fit noise less. With 0.01 and 100 trees, the rebuilt model's scores stay between about 0.15 and 0.70.</p></details>
+    <details><summary>The report ranks inputs by F-score. What can go wrong?</summary><p>The F-score counts splits, so it measures how often a model asks about an input. An input can be asked about often and change little. Blood pressure gets 52 splits in the rebuilt model, yet shuffling it barely changes accuracy.</p></details>
+    <details><summary>How does the shuffle test work, and what are its limits?</summary><p>Shuffle one column of the held-out set, which keeps its values but breaks their link to the outcome, and measure the drop in accuracy. When two inputs share the same information, shuffling one can look harmless because the model leans on the other.</p></details>
+    <details><summary>What is a SHAP value, and why do they add up to the score?</summary><p>It is an input's average added effect on the score over all the orders in which inputs could be revealed. Along any single order, the added effects add up to the full score minus the average. Averaging over orders keeps that sum.</p></details>
+    <details><summary>Why treat age as a category in the network? What is the cost?</summary><p>An embedding can learn any pattern across ages, including bumps a straight line would miss. The cost is that the network does not know that 40 and 41 are close, and an age missing from the training data gets a generic "unknown" value.</p></details>
+    <details><summary>Why are the zeros in this dataset a problem?</summary><p>A glucose level, blood pressure or BMI of 0 is impossible, so a 0 means "not measured". A model that reads it as a low value learns from how the data was recorded. Marking these values as missing is safer.</p></details>
+    <details><summary>Is the score a probability?</summary><p>Not as trained here. The network was trained as a regression on 0 and 1, and its range runs to 1.2. Turning scores into probabilities needs a calibration step and a check against observed rates.</p></details>
+    <details><summary>Would this model work in a clinic in Mumbai?</summary><p>Not without checking. It learned from women of Pima heritage in the United States. Other groups differ in base rates and measurements, so the model would need testing, and probably retraining, on local data.</p></details>
+    <details><summary>What would you change if you did the project again?</summary><p>Mark zeros as missing, keep a held-out set from the start, train a classifier and check its calibration, and report sensitivity and specificity at a cut-off chosen for screening.</p></details>
+  </div>
+</section>
+
+<footer>
+  <span><a href="../">&larr; Diabetes Risk Screening</a> &middot; <a class="mail mail-sm" href="#check" data-n="yar" data-d="ni.baliam" aria-label="Email Rayhaan" title="Write an email"><span class="mail-art"><img src="../../../assets/img/email.png" alt="" width="1008" height="124"></span></a></span>
+  <span><button type="button" class="theme-toggle" id="theme-toggle">dark mode</button></span>
+</footer>
+
+</main>
+<script src="../../../assets/site.js?v=5" defer></script>
+<script src="../xgb.js?v=5" defer></script>
+<script src="primer.js?v=5" defer></script>
+</body>
+</html>
