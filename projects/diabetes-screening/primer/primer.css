@@ -41,6 +41,63 @@ ul.plain li { margin: 4px 0; }
 .qa details[open] summary { border-bottom: 1px solid var(--rule); }
 .qa details p { margin: 10px 14px 12px; color: var(--ink-2); }
 
+/* Section pattern: guess first, terms, claim, figure, where it breaks, quick quiz. */
+.ask { max-width: 46em; margin: 0 0 14px; padding: 10px 14px; border-left: 3px solid var(--teal); background: var(--mark); border-radius: 0 6px 6px 0; color: var(--ink); }
+.terms { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 6px 18px; max-width: 46em; margin: 0 0 16px; padding: 10px 14px; border: 1px solid var(--rule); border-radius: 6px; background: var(--paper); font-size: 15px; line-height: 1.4; }
+.terms div { margin: 0; }
+.terms dt { display: inline; font-weight: 600; color: var(--ink); }
+.terms dt::after { content: "\00a0\2013\00a0"; font-weight: 400; color: var(--muted); }
+.terms dd { display: inline; margin: 0; color: var(--ink-2); }
+.claim { max-width: 46em; font-weight: 600; color: var(--ink); }
+.task { max-width: 46em; color: var(--ink-2); }
+.task-a { max-width: 46em; margin: -6px 0 14px; color: var(--ink-2); }
+.task-a summary { cursor: pointer; color: var(--link); }
+.break { max-width: 46em; margin: 16px 0; padding: 8px 14px; border: 1px solid var(--rule); border-left: 3px solid var(--coral); border-radius: 0 6px 6px 0; }
+.break p { margin: 5px 0; color: var(--ink-2); }
+.break b { color: var(--ink); }
+.break details { margin: 6px 0 4px; }
+.break summary { cursor: pointer; color: var(--link); }
+.recall { max-width: 46em; margin: 18px 0 0; }
+.recall-h { margin: 0 0 6px; font-family: "Spectral SC", "Spectral", Georgia, serif; font-weight: 600; letter-spacing: 0.04em; color: var(--muted); }
+.recall details { border: 1px solid var(--rule); border-radius: 6px; background: var(--paper); margin: 8px 0; }
+.recall summary { cursor: pointer; padding: 10px 14px; font-weight: 600; color: var(--ink); }
+.recall details[open] summary { border-bottom: 1px solid var(--rule); }
+.recall details p { margin: 10px 14px 12px; color: var(--ink-2); }
+.recall summary a { font-weight: 600; }
+
+/* Warm-up quiz, asked again at the end. */
+.quiz { max-width: 46em; }
+.quiz fieldset { margin: 0 0 12px; padding: 10px 14px 8px; border: 1px solid var(--rule); border-radius: 6px; background: var(--paper); }
+.quiz legend { padding: 0 6px; font-weight: 600; color: var(--ink); }
+.quiz label { display: block; margin: 4px 0; padding: 4px 8px; border-radius: 4px; color: var(--ink-2); cursor: pointer; }
+.quiz label:hover { background: var(--mark); }
+.quiz input { accent-color: var(--teal); margin-right: 4px; }
+.quiz label.ok { background: var(--mark); color: var(--ink); font-weight: 600; }
+.quiz label.ok::after { content: "  \2713 right answer"; font-weight: 400; color: var(--link-hover); }
+.quiz label.no { text-decoration: line-through; text-decoration-color: var(--coral); }
+.quiz .was { font-style: italic; color: var(--muted); }
+.quiz .fb { margin: 6px 8px 4px; color: var(--ink-2); }
+.quiz .fb:empty { display: none; }
+
+/* Rebuild the tree from memory. */
+.redraw { margin: 6px 0 12px; padding: 12px 14px; border: 1px solid var(--rule); border-radius: 6px; background: var(--paper); }
+.redraw svg { display: block; width: 100%; max-width: 560px; height: auto; margin: 0 auto 6px; }
+.redraw svg text { font-family: "Spectral", Georgia, serif; }
+.rd-list { display: grid; gap: 8px; margin: 8px 0 10px; }
+.rd-list label { color: var(--ink-2); }
+.rd-list select { font: inherit; font-size: 15px; max-width: 100%; padding: 2px 6px; border: 1px solid var(--rule); border-radius: 4px; background: var(--bg); color: var(--ink); }
+.rd-list .res.ok { color: var(--link-hover); font-weight: 600; }
+.rd-list .res.no { color: var(--coral); font-weight: 600; }
+.redraw .bar .status { margin: 0 0 0 10px; }
+
+/* The network figure: wires light up from left to right when the figure comes into view. */
+#nt-svg .wire line { stroke: var(--muted); stroke-opacity: 0.18; stroke-width: 0.8; }
+#nt-svg.go .wire line { animation: nt-wire 1.1s ease both; }
+#nt-svg.go .wire-2 line { animation-delay: 0.7s; }
+#nt-svg.go .wire-3 line { animation-delay: 1.4s; }
+@keyframes nt-wire { 0% { stroke-opacity: 0.18; } 45% { stroke: var(--teal); stroke-opacity: 0.75; stroke-width: 1.2; } 100% { stroke-opacity: 0.18; } }
+@media (prefers-reduced-motion: reduce) { #nt-svg.go .wire line { animation: none; stroke: var(--teal); stroke-opacity: 0.35; } }
+
 @media (max-width: 760px) {
   .toc ol { columns: 1; }
   .counts { grid-template-columns: repeat(2, minmax(0, 1fr)); }

@@ -1,6 +1,9 @@
 // Primer for the diabetes project: the base rate and the split, a one-rule model, a depth-2 tree,
-// boosting tree by tree, a single ReLU unit, cut-offs and a Shapley value toy.
-// data.json holds the 768 rows with the same 80/20 split (random seed 42) as the rebuilt XGBoost model.
+// tree depth and overfitting, boosting tree by tree, a single ReLU unit, the network's layout,
+// cut-offs, split counts against the shuffle test, a Shapley value toy and the zeros in the data,
+// plus the warm-up quiz and the tree to rebuild from memory.
+// data.json holds the 768 rows with the same 80/20 split (random seed 42) as the rebuilt XGBoost model,
+// and a depth curve for decision trees averaged over 50 random 80/20 splits.
 (function () {
   "use strict";
   var NS = "http://www.w3.org/2000/svg";
@@ -68,18 +71,21 @@
     D.b = D.X.map(function (r) { return r[D.features.indexOf("BMI")]; });
     D.train = []; D.held = [];
     D.y.forEach(function (v, i) { (D.test[i] ? D.held : D.train).push(i); });
-    waffle(D); rule(D); tree(D); unit(D);
+    waffle(D, "wf", [0, 1], ["the data", "always say no"]);
+    waffle(D, "sp", [0, 2], ["all 768", "80/20 split"]);
+    rule(D); tree(D); depth(D); unit(D); network(); splitCounts(X); zeros(D);
     if (typeof DiabetesXGB !== "undefined") { var S = scores(D, X); boost(D, S); cutoff(D, S); }
     shapley();
   });
 
-  // ---------- 1. the base rate and the split ----------
+  // ---------- 1 and 2. the base rate and the split ----------
 
-  function waffle(D) {
-    var svg = $("wf-svg"), note = $("wf-note"), view = 0, W = 0, sq = [], L = null;
+  // views picks from: 0 the data, 1 always say no, 2 the 80/20 split.
+  function waffle(D, id, views, labels) {
+    var svg = $(id + "-svg"), note = $(id + "-note"), view = views[0], W = 0, sq = [], L = null;
     var n = D.y.length, ord = D.y.map(function (v, i) { return i; }).sort(function (a, b) { return D.y[b] - D.y[a] || a - b; });
     var pos = D.y.length - count(D, function (i) { return D.y[i] === 0; });
-    chips($("wf-views"), ["the data", "always say no", "80/20 split"], view, function (i) { var was = view; view = i; place(was === 2 || i === 2); paint(); });
+    chips($(id + "-views"), labels, 0, function (i) { var was = view; view = views[i]; place(was === 2 || view === 2); paint(); });
     function layouts() {
       var cols = W < 460 ? 24 : 48, gap = 2, c = Math.min(14, (W - gap * (cols - 1)) / cols), top = 22;
       var full = {}, split = {};
@@ -442,7 +448,7 @@
       } else G.edge.style.display = "none";
       var on = D.train.filter(function (i) { return out(D.g[i], D.b[i]) > 0; }), pos = on.filter(function (i) { return D.y[i]; }).length;
       note.textContent = on.length ? "The unit is active for " + on.length + " of the " + D.train.length + " training women, and " + pct(pos / on.length) + " of them had diabetes, against 34.9% overall."
-        : "The unit is never active on these women, so it passes nothing on.";
+        : "The unit is never active on these women, so its output is always zero.";
     }
     build();
     window.addEventListener("resize", debounce(function () { if (width(svg) !== W) build(); }));
@@ -511,4 +517,277 @@
     draw();
     window.addEventListener("resize", debounce(function () { if (width(svg) !== W) draw(); }));
   }
+
+  // ---------- 5. tree depth and overfitting ----------
+
+  function depth(D) {
+    var C = D.depth, svg = $("dp-svg"), note = $("dp-note"), k = $("dp-k"), out = $("dp-val"), play = $("dp-play"), W = 0, G = null, timer = 0;
+    var N = C.train.length, base = count(D, function (i) { return D.y[i] === 0; }) / D.y.length;
+    function name(j) { return j === N - 1 ? "no limit" : String(j + 1); }
+    function build() {
+      clear(svg);
+      W = width(svg);
+      var narrow = W < 560, m = { l: 40, r: narrow ? 64 : 84, t: 12, b: 36 }, H = narrow ? 250 : 290;
+      var X = function (j) { return m.l + (W - m.l - m.r) * j / (N - 1); };
+      var Y = function (a) { return H - m.b - (H - m.t - m.b) * (a - 0.6) / 0.4; };
+      G = { X: X, Y: Y, m: m, H: H };
+      [0.6, 0.7, 0.8, 0.9, 1].forEach(function (a) {
+        el("line", { x1: m.l, x2: W - m.r, y1: Y(a), y2: Y(a), style: "stroke:var(--rule)" }, svg);
+        text(svg, m.l - 6, Y(a) + 4, Math.round(a * 100) + "%", { "text-anchor": "end", "font-size": 12, style: "fill:var(--muted)" });
+      });
+      el("line", { x1: m.l, x2: W - m.r, y1: Y(base), y2: Y(base), style: "stroke:var(--muted)", "stroke-dasharray": "4 4" }, svg);
+      text(svg, W - m.r - 4, Y(base) + 15, "always say no, " + pct(base), { "text-anchor": "end", "font-size": 12, style: "fill:var(--muted)" });
+      var band = C.hi.map(function (v, j) { return X(j).toFixed(1) + "," + Y(v).toFixed(1); })
+        .concat(C.lo.map(function (v, j) { return X(j).toFixed(1) + "," + Y(v).toFixed(1); }).reverse());
+      el("polygon", { points: band.join(" "), style: "fill:var(--coral);fill-opacity:0.12" }, svg);
+      function line(arr) { return arr.map(function (v, j) { return (j ? "L" : "M") + X(j).toFixed(1) + " " + Y(v).toFixed(1); }).join(""); }
+      el("path", { d: line(C.train), style: "fill:none;stroke:var(--navy)", "stroke-width": 2.5 }, svg);
+      el("path", { d: line(C.held), style: "fill:none;stroke:var(--coral)", "stroke-width": 2.5 }, svg);
+      text(svg, X(N - 1) + 9, Y(C.train[N - 1]) + 4, "training", { "font-size": 13, "font-weight": 600, style: "fill:var(--navy)" });
+      text(svg, X(N - 1) + 9, Y(C.held[N - 1]) + 4, "held out", { "font-size": 13, "font-weight": 600, style: "fill:var(--coral)" });
+      for (var j = 0; j < N; j++) {
+        if (narrow && j % 3 && j !== N - 1) continue;
+        text(svg, X(j), H - m.b + 16, name(j), { "text-anchor": "middle", "font-size": 12, style: "fill:var(--muted)" });
+      }
+      text(svg, (m.l + W - m.r) / 2, H - 3, "depth: questions asked in a row", { "text-anchor": "middle", "font-size": 13, style: "fill:var(--ink-2)" });
+      G.v = el("line", { y1: m.t, y2: H - m.b, style: "stroke:var(--ink)", "stroke-width": 1.5 }, svg);
+      G.dt = el("circle", { r: 5, style: "fill:var(--navy);stroke:var(--paper)", "stroke-width": 2 }, svg);
+      G.dh = el("circle", { r: 5, style: "fill:var(--coral);stroke:var(--paper)", "stroke-width": 2 }, svg);
+      svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+      update();
+    }
+    function update() {
+      var j = Number(k.value) - 1, x = G.X(j);
+      out.textContent = name(j);
+      G.v.setAttribute("x1", x); G.v.setAttribute("x2", x);
+      G.dt.setAttribute("cx", x); G.dt.setAttribute("cy", G.Y(C.train[j]));
+      G.dh.setAttribute("cx", x); G.dh.setAttribute("cy", G.Y(C.held[j]));
+      var per = Math.round(D.train.length / C.leaves[j]);
+      note.textContent = (j === N - 1 ? "With no depth limit" : "At depth " + (j + 1)) + ", training accuracy is " + pct(C.train[j]) + " and held-out accuracy " + pct(C.held[j]) +
+        ". The tree has about " + C.leaves[j] + " leaves for the " + D.train.length + " training women, about " + per + " per leaf.";
+    }
+    function stop() { clearInterval(timer); timer = 0; play.textContent = "Play"; }
+    play.addEventListener("click", function () {
+      if (timer) { stop(); return; }
+      if (Number(k.value) >= N) k.value = 1;
+      play.textContent = "Pause"; update();
+      timer = setInterval(function () { k.value = Number(k.value) + 1; update(); if (Number(k.value) >= N) stop(); }, reduce ? 300 : 650);
+    });
+    k.addEventListener("input", function () { stop(); update(); });
+    build();
+    window.addEventListener("resize", debounce(function () { if (width(svg) !== W) build(); }));
+  }
+
+  // ---------- 8. the layout of the deployed network ----------
+
+  function network() {
+    var svg = $("nt-svg"), W = 0;
+    function build() {
+      clear(svg);
+      W = width(svg);
+      var narrow = W < 560, H = narrow ? 290 : 320, top = 40, bot = narrow ? 34 : 30;
+      var names = ["glucose", "BMI", narrow ? "blood pr." : "blood pressure", "skin fold", "insulin", "pedigree", "age", "pregnancies"];
+      var lab = narrow ? 76 : 108, right = narrow ? 64 : 92, x0 = lab + 6, s = (W - right - x0) / 3;
+      var shown = [8, 10, 7, 1], xs = [x0, x0 + s, x0 + 2 * s, x0 + 3 * s];
+      var heads = narrow ? ["inputs", "layer 1", "layer 2", "score"] : ["8 inputs", "layer 1, 200 units", "layer 2, 100 units", "score"];
+      var ys = shown.map(function (n) {
+        var span = Math.min(H - top - bot, (n - 1) * 30), y0 = top + (H - top - bot - span) / 2;
+        var a = []; for (var i = 0; i < n; i++) a.push(n === 1 ? top + (H - top - bot) / 2 : y0 + span * i / (n - 1));
+        return a;
+      });
+      for (var c = 0; c < 3; c++) {
+        var g = el("g", { "class": "wire wire-" + (c + 1) }, svg);
+        ys[c].forEach(function (ya) { ys[c + 1].forEach(function (yb) { el("line", { x1: xs[c], y1: ya, x2: xs[c + 1], y2: yb }, g); }); });
+      }
+      ys.forEach(function (col, c) {
+        text(svg, xs[c], 16, heads[c], { "text-anchor": "middle", "font-size": 13, "font-weight": 600, style: "fill:var(--ink)" });
+        col.forEach(function (y, i) {
+          if (c === 0 && i >= 6) el("rect", { x: xs[c] - 6, y: y - 6, width: 12, height: 12, rx: 2, style: "fill:var(--sand);stroke:var(--paper)", "stroke-width": 1.5 }, svg);
+          else el("circle", { cx: xs[c], cy: y, r: c === 3 ? 9 : 6, "class": "node node-" + c, style: "fill:var(--" + (c === 0 ? "navy" : c === 3 ? "coral" : "teal") + ");stroke:var(--paper)", "stroke-width": 1.5 }, svg);
+          if (c === 0) text(svg, lab - 4, y + 4, names[i], { "text-anchor": "end", "font-size": 12.5, style: "fill:var(--ink-2)" });
+        });
+        if (c === 1 || c === 2) text(svg, xs[c], H - bot + 18, narrow ? (c === 1 ? "200 units" : "100 units") : "only some units drawn", { "text-anchor": "middle", "font-size": 12, style: "fill:var(--muted)" });
+      });
+      text(svg, xs[3] + 14, ys[3][0] + 4, narrow ? "0 to 1.2" : "from 0 to 1.2", { "font-size": 12.5, style: "fill:var(--ink-2)" });
+      text(svg, 2, H - bot + 18, narrow ? "squares: embeddings" : "squares: categories, read through embeddings", { "font-size": 12, style: "fill:var(--muted)" });
+      svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    }
+    // The wires light up layer by layer, once when the figure comes into view and again on request.
+    function run() { svg.classList.remove("go"); void svg.getBoundingClientRect(); svg.classList.add("go"); }
+    $("nt-run").addEventListener("click", run);
+    if ("IntersectionObserver" in window) new IntersectionObserver(function (es, io) { if (es[0].isIntersecting) { run(); io.disconnect(); } }, { threshold: 0.5 }).observe(svg);
+    build();
+    window.addEventListener("resize", debounce(function () { if (width(svg) !== W) build(); }));
+  }
+
+  // ---------- 10. split counts against the shuffle test ----------
+
+  function splitCounts(X) {
+    var svg = $("ct-svg"), W = 0;
+    var NAME = { Pregnancies: "pregnancies", Glucose: "glucose", BloodPressure: "blood pressure", SkinThickness: "skin fold", Insulin: "insulin", BMI: "BMI", DiabetesPedigreeFunction: "pedigree", Age: "age" };
+    var rows = X.features.slice().sort(function (a, b) { return X.weight[b] - X.weight[a]; });
+    var mw = Math.max.apply(null, rows.map(function (f) { return X.weight[f]; }));
+    function build() {
+      clear(svg);
+      W = width(svg);
+      var narrow = W < 560, lab = narrow ? 96 : 124, gap = 20, rh = 28, top = 30, H = top + rows.length * rh + 6;
+      var pw = (W - lab - gap) / 2, x1 = lab, x2 = lab + pw + gap;
+      text(svg, x1, 14, narrow ? "times asked" : "times the trees ask about it", { "font-size": 13, "font-weight": 600, style: "fill:var(--ink)" });
+      text(svg, x2, 14, narrow ? "accuracy lost" : "accuracy lost when shuffled", { "font-size": 13, "font-weight": 600, style: "fill:var(--ink)" });
+      rows.forEach(function (f, r) {
+        var y = top + r * rh, hl = f === "BloodPressure" || f === "Insulin";
+        if (hl) el("rect", { x: 0, y: y - 5, width: W, height: rh - 2, rx: 4, style: "fill:var(--mark)" }, svg);
+        text(svg, lab - 10, y + 13, NAME[f], { "text-anchor": "end", "font-size": 13.5, "font-weight": hl ? 600 : 400, style: "fill:var(--ink)" });
+        var b1 = (pw - 44) * X.weight[f] / mw;
+        el("rect", { x: x1, y: y, width: b1.toFixed(1), height: rh - 12, rx: 2, style: "fill:var(--navy);fill-opacity:0.85" }, svg);
+        text(svg, x1 + b1 + 5, y + 13, String(X.weight[f]), { "font-size": 12.5, style: "fill:var(--ink-2)" });
+        var p = Math.max(0, X.perm[f][0]), b2 = (pw - 64) * p / 0.19;
+        if (p > 0.0005) el("rect", { x: x2, y: y, width: b2.toFixed(1), height: rh - 12, rx: 2, style: "fill:var(--coral);fill-opacity:0.85" }, svg);
+        text(svg, x2 + b2 + 5, y + 13, p > 0.0005 ? (100 * p).toFixed(1) + " pts" : "0", { "font-size": 12.5, style: "fill:var(--ink-2)" });
+      });
+      [x1, x2].forEach(function (x) { el("line", { x1: x, x2: x, y1: top - 6, y2: H - 4, style: "stroke:var(--ink-2)" }, svg); });
+      svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    }
+    build();
+    window.addEventListener("resize", debounce(function () { if (width(svg) !== W) build(); }));
+  }
+
+  // ---------- 12. zeros that mean "not measured" ----------
+
+  function zeros(D) {
+    var svg = $("zr-svg"), W = 0, n = D.y.length;
+    var cols = [["Insulin", "insulin"], ["SkinThickness", "skin fold"], ["BloodPressure", "blood pressure"], ["BMI", "BMI"], ["Glucose", "glucose"]];
+    var z = cols.map(function (c) { var j = D.features.indexOf(c[0]); return D.X.filter(function (r) { return r[j] === 0; }).length; });
+    function build() {
+      clear(svg);
+      W = width(svg);
+      var narrow = W < 560, lab = narrow ? 96 : 124, rh = 30, top = 24, H = top + cols.length * rh + 4, pw = W - lab - (narrow ? 104 : 150);
+      text(svg, lab, 14, "women with a zero recorded, out of " + n, { "font-size": 13, "font-weight": 600, style: "fill:var(--ink)" });
+      cols.forEach(function (c, r) {
+        var y = top + r * rh, w = pw * z[r] / n;
+        text(svg, lab - 10, y + 14, c[1], { "text-anchor": "end", "font-size": 13.5, style: "fill:var(--ink)" });
+        el("rect", { x: lab, y: y + 2, width: pw.toFixed(1), height: rh - 12, rx: 2, style: "fill:var(--rule)" }, svg);
+        el("rect", { x: lab, y: y + 2, width: Math.max(2, w).toFixed(1), height: rh - 12, rx: 2, style: "fill:var(--coral);fill-opacity:0.85" }, svg);
+        text(svg, lab + pw + 8, y + 14, z[r] + " (" + Math.round(100 * z[r] / n) + "%)", { "font-size": 12.5, style: "fill:var(--ink-2)" });
+      });
+      svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    }
+    build();
+    window.addEventListener("resize", debounce(function () { if (width(svg) !== W) build(); }));
+  }
+
+  // ---------- the warm-up quiz, asked again at the end ----------
+
+  var QUIZ = [
+    { q: "A model is right about nearly all the women it trained on. What does that tell you about new women?",
+      o: ["It will be right about nearly all of them too.", "Little. You need to grade it on women it never saw.", "It will be right about half of them."],
+      a: 1, why: "The model has seen the answers for its training women, so its score there is too kind. The deepest tree in this primer is right about all its training women and wrong about three in ten new ones.", link: "#depth" },
+    { q: "After training, what does the model keep?",
+      o: ["A copy of the 768 women, which it searches for the closest match.", "Rules that a programmer wrote by hand.", "A set of numbers, such as cut-offs and weights, tuned on those women."],
+      a: 2, why: "Training tunes numbers: the questions and cut-offs of the trees, or the weights of the network. The women are not stored in the model.", link: "#tree" },
+    { q: "You type your measurements into the app. What happens to the model?",
+      o: ["Its numbers stay fixed. It computes your score and changes only if someone retrains it.", "It learns from your numbers and improves.", "It adds you to the women it compares new people with."],
+      a: 0, why: "Training finished before the app went online. The model's 27,452 numbers stay the same whatever you type.", link: "#network" },
+    { q: "The trees ask about blood pressure 52 times. What does that tell you?",
+      o: ["Blood pressure is one of the most important inputs.", "Only that the trees ask about it often. Its effect on the calls could still be small.", "High blood pressure causes diabetes."],
+      a: 1, why: "Shuffling blood pressure costs the model no accuracy, so its 52 questions change almost no calls. A count of questions measures habit.", link: "#count" }
+  ];
+
+  function quiz() {
+    var KEY = "dm-primer-warmup", pre = {}, post = [];
+    try { pre = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) { pre = {}; }
+    function save() { try { localStorage.setItem(KEY, JSON.stringify(pre)); } catch (e) { /* private window */ } }
+    function render(box, late) {
+      if (!box) return;
+      QUIZ.forEach(function (Q, i) {
+        var fs = document.createElement("fieldset"), lg = document.createElement("legend"), fb = document.createElement("p"), labs = [];
+        lg.textContent = (i + 1) + ". " + Q.q;
+        fs.appendChild(lg);
+        fb.className = "fb"; fb.setAttribute("aria-live", "polite");
+        Q.o.forEach(function (o, j) {
+          var lab = document.createElement("label"), inp = document.createElement("input"), was = document.createElement("span");
+          inp.type = "radio"; inp.name = (late ? "post" : "pre") + i; inp.value = j;
+          if (!late && pre[i] === j) inp.checked = true;
+          was.className = "was";
+          lab.appendChild(inp); lab.appendChild(document.createTextNode(" " + o)); lab.appendChild(was);
+          inp.addEventListener("change", function () {
+            if (!late) { pre[i] = j; save(); mark(); return; }
+            labs.forEach(function (l, m) { l.classList.toggle("ok", m === Q.a); l.classList.toggle("no", m === j && j !== Q.a); });
+            fb.innerHTML = "<b>" + (j === Q.a ? "Right." : "Not quite.") + "</b> " + Q.why + " <a href=\"" + Q.link + "\">Back to that section</a>";
+          });
+          fs.appendChild(lab); labs.push(lab);
+        });
+        fs.appendChild(fb);
+        box.appendChild(fs);
+        if (late) post.push(labs);
+      });
+    }
+    function mark() {
+      post.forEach(function (labs, i) { labs.forEach(function (l, j) { l.querySelector(".was").textContent = pre[i] === j ? " (your warm-up pick)" : ""; }); });
+    }
+    render($("pre-quiz"), false);
+    render($("post-quiz"), true);
+    mark();
+  }
+
+  // ---------- 4. rebuild the tree from memory ----------
+
+  function redraw() {
+    var box = $("rd");
+    if (!box) return;
+    var BANK = ["a question with a cut-off", "a leaf that makes the call", "the depth", "the base rate", "a weight"];
+    var CALL = ["most of its training women had diabetes", "a programmer decided it", "the newest woman in it had diabetes"];
+    var ITEMS = [["the top box", BANK, 0], ["the two middle boxes", BANK, 0], ["the four bottom boxes", BANK, 1], ["the bracket on the right", BANK, 2], ["A leaf calls diabetes when", CALL, 0]];
+    var svg = el("svg", { viewBox: "0 0 560 210", role: "img", "aria-label": "A tree skeleton with numbered blanks" }, box);
+    var nodes = [[280, 24], [160, 98], [400, 98], [100, 172], [220, 172], [340, 172], [460, 172]];
+    [[0, 1, "yes"], [0, 2, "no"], [1, 3, "yes"], [1, 4, "no"], [2, 5, "yes"], [2, 6, "no"]].forEach(function (e) {
+      var a = nodes[e[0]], b = nodes[e[1]];
+      el("line", { x1: a[0], y1: a[1] + 14, x2: b[0], y2: b[1] - 14, style: "stroke:var(--muted)" }, svg);
+      text(svg, (a[0] + b[0]) / 2 + (b[0] < a[0] ? -16 : 16), (a[1] + b[1]) / 2 + 4, e[2], { "text-anchor": "middle", "font-size": 12, style: "fill:var(--muted)" });
+    });
+    nodes.forEach(function (p, i) {
+      var tag = i === 0 ? 1 : i < 3 ? 2 : 3;
+      el("rect", { x: p[0] - 46, y: p[1] - 14, width: 92, height: 28, rx: 5, style: "fill:var(--paper);stroke:var(--ink-2)", "stroke-dasharray": "4 3" }, svg);
+      el("circle", { cx: p[0], cy: p[1], r: 10, style: "fill:var(--teal)" }, svg);
+      text(svg, p[0], p[1] + 4.5, String(tag), { "text-anchor": "middle", "font-size": 13, "font-weight": 600, style: "fill:var(--bg)" });
+    });
+    el("path", { d: "M528 10 H536 V112 H528", style: "fill:none;stroke:var(--ink-2)" }, svg);
+    el("circle", { cx: 548, cy: 61, r: 10, style: "fill:var(--teal)" }, svg);
+    text(svg, 548, 65.5, "4", { "text-anchor": "middle", "font-size": 13, "font-weight": 600, style: "fill:var(--bg)" });
+    var bank = document.createElement("p");
+    bank.className = "note";
+    bank.textContent = "Word bank: " + BANK.join(" · ");
+    box.appendChild(bank);
+    var list = document.createElement("div"), sels = [];
+    list.className = "rd-list";
+    ITEMS.forEach(function (it, i) {
+      var lab = document.createElement("label"), sel = document.createElement("select"), res = document.createElement("span");
+      var none = document.createElement("option"); none.value = ""; none.textContent = "choose";
+      sel.appendChild(none);
+      it[1].forEach(function (w, j) { var o = document.createElement("option"); o.value = j; o.textContent = w; sel.appendChild(o); });
+      res.className = "res";
+      lab.appendChild(document.createTextNode((i + 1) + ". " + it[0] + (i === 1 || i === 2 ? " are" : i < 4 ? " is" : "") + " "));
+      lab.appendChild(sel); lab.appendChild(res);
+      list.appendChild(lab); sels.push([sel, res, it[2]]);
+    });
+    box.appendChild(list);
+    var btn = document.createElement("button"), out = document.createElement("span");
+    btn.type = "button"; btn.className = "btn"; btn.textContent = "Check";
+    out.className = "status"; out.setAttribute("aria-live", "polite");
+    btn.addEventListener("click", function () {
+      var ok = 0;
+      sels.forEach(function (s) {
+        var right = s[0].value !== "" && Number(s[0].value) === s[2];
+        if (right) ok++;
+        s[1].textContent = s[0].value === "" ? "" : right ? " ✓ right" : " ✗ try again";
+        s[1].className = "res " + (right ? "ok" : "no");
+      });
+      out.textContent = " Right: " + ok + " of " + sels.length + ".";
+    });
+    var bar = document.createElement("div"); bar.className = "bar"; bar.appendChild(btn); bar.appendChild(out);
+    box.appendChild(bar);
+  }
+
+  // These two need no data, and run after QUIZ is defined.
+  quiz(); redraw();
 })();
