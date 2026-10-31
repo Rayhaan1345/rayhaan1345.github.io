@@ -15,8 +15,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;1,400&family=Spectral+SC:wght@500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../../assets/site.css?v=3">
-<link rel="stylesheet" href="../../assets/project.css?v=3">
+<link rel="stylesheet" href="../../assets/site.css?v=4">
+<link rel="stylesheet" href="../../assets/project.css?v=4">
 <script>try{var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
 </head>
 <body>
@@ -58,6 +58,7 @@
       <div class="try-score">
         <p class="score-line"><b id="tr-score" aria-live="polite">&hellip;</b><span>score</span></p>
         <svg id="tr-gauge" role="img" aria-label="Where the score falls between 0 and 1.2"></svg>
+        <p class="note" id="tr-xgb" style="margin:4px 0 0"></p>
       </div>
       <div class="try-net">
         <svg id="tr-net" role="img" aria-label="Activity inside the network for the current inputs"></svg>
@@ -111,19 +112,71 @@
 </section>
 
 <section id="drivers" aria-labelledby="drivers-h">
-  <h2 id="drivers-h">What moves the score</h2>
-  <p>Two views answer this question for two different models. For the deployed model, the bars show how far the score moves when one input runs across its usual range and the rest stay at the defaults. The report's XGBoost experiment ranks the inputs by how often its trees split on them.</p>
+  <h2 id="drivers-h">What moves the deployed model's score</h2>
+  <p>The bars show how far the deployed model's score moves when one input runs across its usual range and the rest stay at the app's defaults. The small curves trace the score along the way.</p>
   <div class="card" id="drv">
-    <div class="bar">
-      <div class="group" role="group" aria-label="Which model">
-        <button type="button" data-drv="dep" aria-pressed="true">deployed model</button>
-        <button type="button" data-drv="xgb" aria-pressed="false">XGBoost in the report</button>
-      </div>
-    </div>
     <svg id="dv-svg" role="img" aria-label="Bar chart of how much each input moves the score"></svg>
     <p class="status" id="dv-note" aria-live="polite"></p>
   </div>
-  <p class="cap"><b>Both models put glucose first.</b> The deployed model's score is also sensitive to the family-history score, BMI and age. The XGBoost F-score counts splits, so it measures something different from the deployed model's response, and the two rankings need not agree.</p>
+  <p class="cap"><b>Glucose moves the score most.</b> The family-history score and BMI follow, then insulin and age. Skin fold, blood pressure and the number of pregnancies barely move it at these defaults.</p>
+</section>
+
+<section id="xgb" aria-labelledby="xgb-h">
+  <h2 id="xgb-h">Rebuilding the XGBoost model</h2>
+  <p>The report's best model used XGBoost, a method that adds up many small decision trees. Its code is not in the repository, so the model in the next sections was rebuilt from the report's description. A search over settings found one that reproduces the report's feature-importance chart. It uses 100 trees of depth 3 and a learning rate of 0.01, trained on 80% of the data split with random seed 42.</p>
+  <p>The report counts how often the trees split on an input, which XGBoost calls the F-score. The rebuilt model matches the report on six inputs. On glucose and BMI it differs by one split, probably because of a newer XGBoost version.</p>
+  <div class="card" id="xg-cmp">
+    <svg id="xc-svg" role="img" aria-label="Split counts per input in the report and in the rebuilt model"></svg>
+  </div>
+  <p class="cap"><b>Split counts in the report and in the rebuilt model.</b> On the 154 women held out from training, the rebuilt model classifies 78.6% correctly when a score above 0.5 counts as diabetes.</p>
+</section>
+
+<section id="importance" aria-labelledby="importance-h">
+  <h2 id="importance-h">Four ways to rank the inputs</h2>
+  <p>Feature importance asks which inputs a model relies on. There are several ways to measure it, and they can disagree. Pick a measure to rank the inputs of the rebuilt model.</p>
+  <div class="card" id="imp">
+    <div class="bar"><div class="group" role="group" aria-label="Measure" id="im-measures"></div></div>
+    <svg id="im-svg" role="img" aria-label="Inputs ranked by the chosen importance measure"></svg>
+    <p class="status" id="im-note" aria-live="polite"></p>
+  </div>
+  <p class="cap"><b>The measures agree on glucose and disagree further down.</b> Blood pressure gets 52 splits, close to insulin and the family-history score. Yet shuffling blood pressure leaves accuracy almost unchanged, and its SHAP share is tiny. Split counts show where a model looks, and the other measures show what changes its answer.</p>
+</section>
+
+<section id="shuffle" aria-labelledby="shuffle-h">
+  <h2 id="shuffle-h">The shuffle test, one shuffle at a time</h2>
+  <p>Below, a square represents one of the 154 held-out women, sorted by the rebuilt model's score from lowest to highest. A teal square is a correct call and a coral square is a wrong one. Shuffle a column and watch which calls change.</p>
+  <div class="card" id="shf">
+    <div class="bar">
+      <div class="group" role="group" aria-label="Column to shuffle" id="sh-feats"></div>
+    </div>
+    <div class="bar">
+      <button type="button" class="btn" id="sh-one">Shuffle</button>
+      <button type="button" class="btn" id="sh-many">Shuffle 20 times</button>
+      <button type="button" class="btn" id="sh-reset">Reset</button>
+    </div>
+    <svg id="sh-svg" role="img" aria-label="Held-out women as squares, coloured by whether the model's call is correct"></svg>
+    <p class="status" id="sh-note" aria-live="polite"></p>
+  </div>
+  <p class="cap"><b>Shuffling one column of the held-out women.</b> Rows run from the lowest score to the highest. A ringed square is a call that the last shuffle changed from the original. Most changes affect women whose score was close to the cut-off of 0.5.</p>
+</section>
+
+<section id="explain" aria-labelledby="explain-h">
+  <h2 id="explain-h">Explain one score</h2>
+  <p>A SHAP value splits the gap between the average score and one woman's score among her inputs. The idea comes from game theory, where Shapley values share a prize fairly among players. An input gets its average effect on the score, taken over all the orders in which the inputs could be revealed.</p>
+  <p>The shares add up to the score. Pick a held-out woman, or use the sliders at the top of the page.</p>
+  <div class="card" id="exp">
+    <div class="bar">
+      <div class="group" role="group" aria-label="Whose inputs">
+        <button type="button" data-ex="woman" aria-pressed="true">a held-out woman</button>
+        <button type="button" data-ex="sliders" aria-pressed="false">the sliders above</button>
+      </div>
+      <button type="button" class="btn" id="ex-prev">&lsaquo; Previous</button>
+      <button type="button" class="btn" id="ex-next">Next &rsaquo;</button>
+    </div>
+    <svg id="ex-svg" role="img" aria-label="How each input moves this score away from the average"></svg>
+    <p class="status" id="ex-note" aria-live="polite"></p>
+  </div>
+  <p class="cap"><b>SHAP values for the rebuilt XGBoost model, computed in your browser.</b> The chart starts at the average score over the training data. Coral bars push the score up, toward diabetes, and teal bars push it down. The values match XGBoost's own calculation to within 0.000001.</p>
 </section>
 
 <section id="app" aria-labelledby="app-h">
@@ -148,8 +201,9 @@
 </footer>
 
 </main>
-<script src="../../assets/site.js?v=3" defer></script>
-<script src="net.js?v=3" defer></script>
-<script src="dm.js?v=3" defer></script>
+<script src="../../assets/site.js?v=4" defer></script>
+<script src="net.js?v=4" defer></script>
+<script src="xgb.js?v=4" defer></script>
+<script src="dm.js?v=4" defer></script>
 </body>
 </html>

@@ -5,6 +5,7 @@
   "use strict";
   var NS = "http://www.w3.org/2000/svg";
   var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var lastInputs = null;  // the inputs on the sliders at the top, shared with the SHAP chart
 
   var FEATS = [
     ["Glucose", "glucose", "Plasma glucose two hours into an oral glucose tolerance test, in mg/dL."],
@@ -18,8 +19,6 @@
   ];
   var LABEL = {};
   FEATS.forEach(function (f) { LABEL[f[0]] = f[1]; });
-  // F-scores of the XGBoost model in the 2024 report (how often its trees split on an input).
-  var XGB = [["Glucose", 213], ["BMI", 190], ["Age", 123], ["DiabetesPedigreeFunction", 61], ["BloodPressure", 52], ["Insulin", 51], ["Pregnancies", 7], ["SkinThickness", 3]];
   var STAGES = [
     ["Business understanding", "Planning", "The charter states the aim: flag people in the prediabetic range early, while changes to diet and exercise can still turn it around. The requirements ask for an answer within two seconds, and the risk list adds a clear note that the app does not replace a doctor."],
     ["Data acquisition and understanding", "Data%20Acquisition%20and%20Understanding", "I loaded the dataset from Kaggle, checked its nine columns and plotted the distribution of the measurements. The data folder keeps the CSV and a short guide to the columns."],
@@ -60,6 +59,11 @@
   function ease(t) { return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; }
   function press(buttons, on) { buttons.forEach(function (b) { b.setAttribute("aria-pressed", String(b === on)); }); }
   function debounce(fn) { var t = 0; return function () { clearTimeout(t); t = setTimeout(fn, 150); }; }
+  function onVisible(node, fn) {
+    if (!("IntersectionObserver" in window)) { fn(); return; }
+    var io = new IntersectionObserver(function (es) { if (es[0].isIntersecting) { io.disconnect(); fn(); } }, { threshold: 0.2 });
+    io.observe(node);
+  }
   function tween(ms, fn) {
     if (reduce) { fn(1); return; }
     var t0 = 0;
@@ -257,6 +261,8 @@
 
     function update() {
       var v = values();
+      lastInputs = v;
+      document.dispatchEvent(new CustomEvent("dm:inputs"));
       R = DiabetesNet.run(M, v);
       scoreEl.textContent = R.score.toFixed(3);
       paintGauge(); paintNet();
@@ -416,38 +422,30 @@
   function drivers(D) {
     var svg = $("dv-svg");
     if (!svg) return;
-    var note = $("dv-note"), mode = "dep", W = 0;
-    var btns = [].slice.call(document.querySelectorAll("#drv [data-drv]"));
-    btns.forEach(function (b) { b.addEventListener("click", function () { press(btns, b); mode = b.dataset.drv; draw(); }); });
+    var note = $("dv-note"), W = 0;
     function draw() {
       clear(svg);
       W = width(svg);
-      var rows;
-      if (mode === "dep") {
-        rows = Object.keys(D.curves).map(function (k) {
-          var y = D.curves[k].y, lo = Math.min.apply(null, y), hi = Math.max.apply(null, y);
-          return [k, (hi - lo) / 1000, D.curves[k]];
-        }).sort(function (a, b) { return b[1] - a[1]; });
-      } else rows = XGB.map(function (r) { return [r[0], r[1], null]; });
-      var narrow = W < 560, lab = narrow ? 104 : 140, spark = mode === "dep" ? (narrow ? 70 : 120) : 0, rh = 34;
+      var rows = Object.keys(D.curves).map(function (k) {
+        var y = D.curves[k].y, lo = Math.min.apply(null, y), hi = Math.max.apply(null, y);
+        return [k, (hi - lo) / 1000, D.curves[k]];
+      }).sort(function (a, b) { return b[1] - a[1]; });
+      var narrow = W < 560, lab = narrow ? 104 : 140, spark = narrow ? 70 : 120, rh = 34;
       var max = Math.max.apply(null, rows.map(function (r) { return r[1]; })) * 1.05;
-      var bx = lab, bw = W - lab - spark - 64 - (spark ? 16 : 0), H = rows.length * rh + 26;
+      var bx = lab, bw = W - lab - spark - 64 - 16, H = rows.length * rh + 26;
       var parts = rows.map(function (r, i) {
         var y = 4 + i * rh;
         text(svg, lab - 10, y + 17, LABEL[r[0]], { "text-anchor": "end", "font-size": 14, style: "fill:var(--ink)" });
         var bar = el("rect", { x: bx, y: y + 6, width: 0, height: 16, rx: 3, style: "fill:var(--" + (i < 3 ? "teal" : "navy") + ")" }, svg);
-        var t = text(svg, bx + bw * r[1] / max + 8, y + 19, mode === "dep" ? "±" + (r[1] / 2).toFixed(2) + " (range " + r[1].toFixed(2) + ")" : String(r[1]), { "font-size": 12.5, style: "fill:var(--ink-2);opacity:0" });
-        if (mode === "dep") t.textContent = r[1].toFixed(2);
-        if (r[2]) {
-          var sx = W - spark, ys = r[2].y, lo = 0, hi = 1200;
-          var pts = ys.map(function (v, j) { return (sx + spark * j / (ys.length - 1)).toFixed(1) + "," + (y + 26 - 22 * (v - lo) / (hi - lo)).toFixed(1); }).join(" ");
-          el("rect", { x: sx, y: y + 3, width: spark, height: 24, rx: 2, style: "fill:var(--bg);stroke:var(--rule)" }, svg);
-          el("polyline", { points: pts, fill: "none", style: "stroke:var(--coral)", "stroke-width": 1.6 }, svg);
-        }
+        var t = text(svg, bx + bw * r[1] / max + 8, y + 19, r[1].toFixed(2), { "font-size": 12.5, style: "fill:var(--ink-2);opacity:0" });
+        var sx = W - spark, ys = r[2].y;
+        var pts = ys.map(function (v, j) { return (sx + spark * j / (ys.length - 1)).toFixed(1) + "," + (y + 26 - 22 * v / 1200).toFixed(1); }).join(" ");
+        el("rect", { x: sx, y: y + 3, width: spark, height: 24, rx: 2, style: "fill:var(--bg);stroke:var(--rule)" }, svg);
+        el("polyline", { points: pts, fill: "none", style: "stroke:var(--coral)", "stroke-width": 1.6 }, svg);
         return { bar: bar, t: t, v: r[1] };
       });
-      text(svg, bx, H - 4, mode === "dep" ? "how far the score moves across the input's range" : "XGBoost F-score: number of splits on the input", { "font-size": 12.5, style: "fill:var(--muted)" });
-      if (spark) text(svg, W - spark, H - 4, "score curve", { "font-size": 12.5, style: "fill:var(--muted)" });
+      text(svg, bx, H - 4, "how far the score moves across the input's range", { "font-size": 12.5, style: "fill:var(--muted)" });
+      text(svg, W - spark, H - 4, "score curve", { "font-size": 12.5, style: "fill:var(--muted)" });
       svg.setAttribute("viewBox", "0 0 " + W + " " + H);
       tween(650, function (e) {
         parts.forEach(function (p) {
@@ -455,11 +453,255 @@
           if (e >= 1) p.t.style.opacity = "1";
         });
       });
-      note.textContent = mode === "dep"
-        ? "A curve shows the score as one input runs across its range, with the others at the app's defaults (vertical scale 0 to 1.2). Age and pregnancies use only the values seen in training."
-        : "From the report's XGBoost model, which the app does not use. Glucose, BMI and age lead.";
+      note.textContent = "A curve shows the score as one input runs across its range, with the others at the app's defaults (vertical scale 0 to 1.2). Age and pregnancies use only the values seen in training.";
     }
     draw();
     window.addEventListener("resize", debounce(function () { if (width(svg) !== W) draw(); }));
+  }
+
+  // ---------- the rebuilt XGBoost model ----------
+
+  var xgbP = fetch("xgb.json").then(function (r) { return r.json(); });
+  xgbP.then(function (X) {
+    if (typeof DiabetesXGB === "undefined") return;
+    xgbCompare(X); importance(X); shuffleTest(X); explain(X);
+  });
+
+  function asRow(X, v) { return X.features.map(function (f) { return v[f]; }); }
+  function fmtInput(f, v) { return f === "DiabetesPedigreeFunction" ? v.toFixed(3) : f === "BMI" ? v.toFixed(1) : String(Math.round(v)); }
+
+  // Split counts in the report beside the rebuilt model's.
+  function xgbCompare(X) {
+    var svg = $("xc-svg");
+    if (!svg) return;
+    var W = 0;
+    function draw() {
+      clear(svg);
+      W = width(svg);
+      var feats = Object.keys(X.report).sort(function (a, b) { return X.report[b] - X.report[a]; });
+      var lab = W < 560 ? 104 : 140, bw = W - lab - 50, rh = 40, top = 26, max = 230;
+      el("rect", { x: lab, y: 4, width: 12, height: 12, style: "fill:var(--navy)" }, svg);
+      text(svg, lab + 18, 14, "report", { "font-size": 12.5, style: "fill:var(--ink-2)" });
+      el("rect", { x: lab + 80, y: 4, width: 12, height: 12, style: "fill:var(--teal)" }, svg);
+      text(svg, lab + 98, 14, "rebuilt model", { "font-size": 12.5, style: "fill:var(--ink-2)" });
+      var bars = [];
+      feats.forEach(function (f, i) {
+        var y = top + i * rh;
+        text(svg, lab - 10, y + 20, LABEL[f], { "text-anchor": "end", "font-size": 14, style: "fill:var(--ink)" });
+        [[X.report[f], "navy", 3], [X.weight[f], "teal", 18]].forEach(function (b) {
+          var r = el("rect", { x: lab, y: y + b[2], width: 0, height: 12, rx: 2, style: "fill:var(--" + b[1] + ")" }, svg);
+          var t = text(svg, lab + bw * b[0] / max + 6, y + b[2] + 10.5, String(b[0]), { "font-size": 12, style: "fill:var(--ink-2);opacity:0" });
+          bars.push([r, t, b[0]]);
+        });
+      });
+      var H = top + feats.length * rh + 4;
+      svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+      tween(650, function (e) {
+        bars.forEach(function (b) { b[0].setAttribute("width", (bw * b[2] / max * e).toFixed(1)); if (e >= 1) b[1].style.opacity = "1"; });
+      });
+    }
+    onVisible(svg, draw);
+    window.addEventListener("resize", debounce(function () { if (W && width(svg) !== W) draw(); }));
+  }
+
+  // One bar per input; switching the measure slides the bars to their new ranks.
+  function importance(X) {
+    var svg = $("im-svg");
+    if (!svg) return;
+    var note = $("im-note"), pick = 0, W = 0, rows = null, geo = null;
+    var MEASURES = [
+      ["splits", function (f) { return X.weight[f]; }, function (v) { return String(v); },
+        "How many times the trees split on the input, across all 100 trees. This is the F-score in the report. It counts uses, whether or not a split changes the score much."],
+      ["gain", function (f) { return X.total_gain[f]; }, function (v) { return v.toFixed(0); },
+        "How much the splits on the input reduce the error on the training data, added up over all the trees. A split that separates the two groups well counts for more."],
+      ["shuffle test", function (f) { return 100 * X.perm[f][0]; }, function (v) { return (v < 0 ? "−" : "") + Math.abs(v).toFixed(1) + " points"; },
+        "How much accuracy on the 154 held-out women drops when the input's column is shuffled, which breaks its link to the outcome. Averaged over 50 shuffles, in percentage points. A drop below zero is noise."],
+      ["SHAP", function (f) { return X.shap[f]; }, function (v) { return v.toFixed(3); },
+        "The average size of the input's share of a woman's score, over the held-out women. The section after next explains these shares."]
+    ];
+    chips($("im-measures"), MEASURES.map(function (m) { return m[0]; }), pick, function (i) { pick = i; update(); });
+    function build() {
+      clear(svg);
+      W = width(svg);
+      var lab = W < 560 ? 104 : 140, rh = 34;
+      geo = { lab: lab, bw: W - lab - 92, rh: rh };
+      rows = {};
+      X.features.forEach(function (f) {
+        var g = el("g", {}, svg);
+        text(g, lab - 10, 17, LABEL[f], { "text-anchor": "end", "font-size": 14, style: "fill:var(--ink)" });
+        var bar = el("rect", { x: lab, y: 6, width: 0, height: 16, rx: 3, style: "fill:var(--navy)" }, g);
+        var t = text(g, lab + 8, 19, "", { "font-size": 12.5, style: "fill:var(--ink-2)" });
+        rows[f] = { g: g, bar: bar, t: t, y: 0, w: 0 };
+      });
+      svg.setAttribute("viewBox", "0 0 " + W + " " + (X.features.length * rh + 6));
+      update(true);
+    }
+    function update(first) {
+      var m = MEASURES[pick], vals = {};
+      X.features.forEach(function (f) { vals[f] = m[1](f); });
+      var order = X.features.slice().sort(function (a, b) { return vals[b] - vals[a]; });
+      var max = Math.max.apply(null, order.map(function (f) { return vals[f]; }));
+      var from = {}, to = {};
+      order.forEach(function (f, i) {
+        var r = rows[f];
+        from[f] = [r.y, r.w];
+        to[f] = [4 + i * geo.rh, geo.bw * Math.max(0, vals[f]) / max];
+        r.bar.setAttribute("style", "fill:var(--" + (i < 3 ? "teal" : "navy") + ")");
+        r.t.textContent = m[2](vals[f]);
+      });
+      if (first) order.forEach(function (f) { from[f] = [to[f][0], 0]; });
+      tween(first ? 650 : 550, function (e) {
+        order.forEach(function (f) {
+          var r = rows[f], y = from[f][0] + (to[f][0] - from[f][0]) * e, w = from[f][1] + (to[f][1] - from[f][1]) * e;
+          r.y = y; r.w = w;
+          r.g.setAttribute("transform", "translate(0 " + y.toFixed(1) + ")");
+          r.bar.setAttribute("width", w.toFixed(1));
+          r.t.setAttribute("x", (geo.lab + w + 8).toFixed(1));
+        });
+      });
+      note.textContent = m[3];
+    }
+    onVisible(svg, build);
+    window.addEventListener("resize", debounce(function () { if (W && width(svg) !== W) build(); }));
+  }
+
+  // The shuffle test on the held-out women, one shuffle at a time.
+  function shuffleTest(X) {
+    var svg = $("sh-svg");
+    if (!svg) return;
+    var note = $("sh-note"), pick = X.features.indexOf("Glucose"), W = 0, cells = [], busy = false;
+    var rowsX = X.test.X, y = X.test.y, n = y.length;
+    var base = rowsX.map(function (r) { return DiabetesXGB.predict(X, r); });
+    var order = base.map(function (p, i) { return i; }).sort(function (a, b) { return base[a] - base[b]; });
+    var right0 = base.map(function (p, i) { return (p > 0.5 ? 1 : 0) === y[i]; });
+    var acc0 = right0.filter(Boolean).length / n, right = right0.slice(), drops = [], dots = [];
+    var call0 = base.map(function (p) { return p > 0.5; }), call = call0.slice();
+    var NAMES = X.features.map(function (f) { return LABEL[f]; });
+    chips($("sh-feats"), NAMES, pick, function (i) { pick = i; drops = []; reset(); });
+    function build() {
+      clear(svg);
+      W = width(svg);
+      var cols = W < 460 ? 14 : 22, gap = 3, c = Math.min(26, (W - gap * (cols - 1)) / cols), top = 20;
+      var gw = cols * (c + gap) - gap, ox = Math.max(0, (W - gw) / 2);
+      cells = new Array(n); dots = new Array(n);
+      order.forEach(function (idx, k) {
+        var x = ox + (k % cols) * (c + gap), yy = top + Math.floor(k / cols) * (c + gap);
+        var r = el("rect", { x: x.toFixed(1), y: yy.toFixed(1), width: c.toFixed(1), height: c.toFixed(1), rx: 3 }, svg);
+        el("title", {}, r).textContent = "Score " + base[idx].toFixed(2) + ", " + (y[idx] ? "had diabetes" : "no diabetes");
+        cells[idx] = r;
+        dots[idx] = el("circle", { cx: (x + c / 2).toFixed(1), cy: (yy + c / 2).toFixed(1), r: (c * 0.16).toFixed(1), style: "fill:var(--bg);pointer-events:none" }, svg);
+      });
+      text(svg, ox, 13, "lowest score", { "font-size": 12, style: "fill:var(--muted)" });
+      text(svg, ox + gw, 13, "highest score", { "text-anchor": "end", "font-size": 12, style: "fill:var(--muted)" });
+      var rowsN = Math.ceil(n / cols);
+      text(svg, ox, top + rowsN * (c + gap) + 14, "A dot marks a call of diabetes, a score above 0.5.", { "font-size": 12, style: "fill:var(--muted)" });
+      svg.setAttribute("viewBox", "0 0 " + W + " " + (top + rowsN * (c + gap) + 20));
+      paint(null);
+    }
+    function paint(changed) {
+      for (var i = 0; i < n; i++) {
+        var ring = changed && changed[i];
+        cells[i].setAttribute("style", "fill:var(--" + (right[i] ? "teal" : "coral") + ");fill-opacity:" + (right[i] ? 0.75 : 0.9) + (ring ? ";stroke:var(--ink);stroke-width:2.5" : ""));
+        dots[i].style.opacity = call[i] ? "1" : "0";
+      }
+    }
+    function once() {
+      var col = rowsX.map(function (r) { return r[pick]; });
+      for (var i = col.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = col[i]; col[i] = col[j]; col[j] = t; }
+      var changed = [], ok = 0;
+      for (var k = 0; k < n; k++) {
+        var r = rowsX[k].slice(); r[pick] = col[k];
+        call[k] = DiabetesXGB.predict(X, r) > 0.5;
+        var now = (call[k] ? 1 : 0) === y[k];
+        changed.push(now !== right0[k]); right[k] = now; if (now) ok++;
+      }
+      drops.push(100 * (acc0 - ok / n));
+      paint(changed);
+      var mean = drops.reduce(function (a, b) { return a + b; }, 0) / drops.length;
+      note.textContent = "Shuffled " + NAMES[pick] + ". Accuracy went from " + (100 * acc0).toFixed(1) + "% to " + (100 * ok / n).toFixed(1) + "%, and " + changed.filter(Boolean).length + " calls changed. Average drop over " + drops.length + (drops.length === 1 ? " shuffle: " : " shuffles: ") + mean.toFixed(1) + " points.";
+    }
+    function reset() {
+      right = right0.slice(); call = call0.slice(); paint(null);
+      note.textContent = "Before shuffling, the model gets " + Math.round(acc0 * n) + " of " + n + " held-out women right, " + (100 * acc0).toFixed(1) + "%. Pick a column and press Shuffle.";
+    }
+    $("sh-one").addEventListener("click", function () { if (!busy) once(); });
+    $("sh-many").addEventListener("click", function () {
+      if (busy) return;
+      busy = true;
+      var k = 0;
+      (function step() { once(); k++; if (k < 20) setTimeout(step, reduce ? 0 : 140); else busy = false; })();
+    });
+    $("sh-reset").addEventListener("click", function () { drops = []; reset(); });
+    build(); reset();
+    window.addEventListener("resize", debounce(function () { if (width(svg) !== W) { build(); } }));
+  }
+
+  // A SHAP waterfall: from the average score to this score, one input at a time.
+  function explain(X) {
+    var svg = $("ex-svg");
+    if (!svg) return;
+    var note = $("ex-note"), mode = "woman", idx = 0, W = 0, tryLine = $("tr-xgb");
+    var rowsX = X.test.X, y = X.test.y;
+    var preds = rowsX.map(function (r) { return DiabetesXGB.predict(X, r); });
+    idx = preds.indexOf(Math.max.apply(null, preds));
+    var btns = [].slice.call(document.querySelectorAll("#exp [data-ex]"));
+    btns.forEach(function (b) { b.addEventListener("click", function () { press(btns, b); mode = b.dataset.ex; $("ex-prev").disabled = $("ex-next").disabled = mode !== "woman"; draw(); }); });
+    $("ex-prev").addEventListener("click", function () { idx = (idx + rowsX.length - 1) % rowsX.length; draw(); });
+    $("ex-next").addEventListener("click", function () { idx = (idx + 1) % rowsX.length; draw(); });
+    document.addEventListener("dm:inputs", function () {
+      if (tryLine && lastInputs) tryLine.textContent = "The rebuilt XGBoost model from the report gives " + DiabetesXGB.predict(X, asRow(X, lastInputs)).toFixed(3) + " for the same inputs.";
+      if (mode === "sliders") draw();
+    });
+    if (lastInputs) document.dispatchEvent(new CustomEvent("dm:inputs"));
+    function draw() {
+      var row = mode === "woman" || !lastInputs ? rowsX[idx] : asRow(X, lastInputs);
+      var phi = DiabetesXGB.shap(X, row), avg = phi[phi.length - 1], score = phi.reduce(function (a, b) { return a + b; }, 0);
+      var parts = X.features.map(function (f, i) { return [f, phi[i], row[i]]; }).sort(function (a, b) { return Math.abs(b[1]) - Math.abs(a[1]); });
+      clear(svg);
+      W = width(svg);
+      var narrow = W < 560, lab = narrow ? 130 : 180, rh = 30, top = 6, right = 56;
+      var cum = [avg], c = avg;
+      parts.forEach(function (p) { c += p[1]; cum.push(c); });
+      var lo = Math.min.apply(null, cum), hi = Math.max.apply(null, cum), pad = Math.max(0.02, (0.3 - (hi - lo)) / 2);
+      lo = Math.max(0, lo - pad); hi = hi + pad;
+      var X0 = function (v) { return lab + (W - lab - right) * (v - lo) / (hi - lo); };
+      var H = top + (parts.length + 2) * rh + 24;
+      [0.5].concat([0.2, 0.3, 0.4, 0.6, 0.7, 0.8]).forEach(function (t) {
+        if (t < lo || t > hi) return;
+        el("line", { x1: X0(t), x2: X0(t), y1: top, y2: H - 22, style: "stroke:var(--" + (t === 0.5 ? "muted" : "rule") + ")", "stroke-dasharray": t === 0.5 ? "4 3" : "" }, svg);
+        text(svg, X0(t), H - 6, t.toFixed(1), { "text-anchor": "middle", "font-size": 12, style: "fill:var(--muted)" });
+      });
+      function rowLine(i, label, strong) {
+        text(svg, lab - 10, top + i * rh + 19, label, { "text-anchor": "end", "font-size": 14, style: "fill:var(--" + (strong ? "ink" : "ink-2") + ")" + (strong ? ";font-weight:600" : "") });
+      }
+      rowLine(0, "average score", true);
+      el("rect", { x: X0(avg) - 1.5, y: top + 5, width: 3, height: 18, style: "fill:var(--ink)" }, svg);
+      text(svg, X0(avg) + 8, top + 19, avg.toFixed(3), { "font-size": 12.5, style: "fill:var(--ink-2)" });
+      var bars = [];
+      parts.forEach(function (p, i) {
+        var a = cum[i], b = cum[i + 1], yy = top + (i + 1) * rh;
+        rowLine(i + 1, LABEL[p[0]] + " " + fmtInput(p[0], p[2]));
+        el("line", { x1: X0(a), x2: X0(a), y1: yy - rh + 23, y2: yy + 5, style: "stroke:var(--muted)", "stroke-width": 1 }, svg);
+        var r = el("rect", { x: X0(Math.min(a, b)), y: yy + 5, width: Math.max(1, Math.abs(X0(b) - X0(a))), height: 18, rx: 2, style: "fill:var(--" + (p[1] >= 0 ? "coral" : "teal") + ")" }, svg);
+        var t = text(svg, X0(Math.max(a, b)) + 6, yy + 19, (Math.abs(p[1]) < 0.0005 ? "" : p[1] > 0 ? "+" : "\u2212") + Math.abs(p[1]).toFixed(3), { "font-size": 12.5, style: "fill:var(--ink-2)" });
+        bars.push([r, a, b]);
+      });
+      var yl = top + (parts.length + 1) * rh;
+      rowLine(parts.length + 1, "score", true);
+      el("rect", { x: X0(score) - 1.5, y: yl + 5, width: 3, height: 18, style: "fill:var(--ink)" }, svg);
+      text(svg, X0(score) + 8, yl + 19, score.toFixed(3), { "font-size": 12.5, "font-weight": 600, style: "fill:var(--ink)" });
+      svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+      tween(450, function (e) {
+        bars.forEach(function (b) {
+          var end = b[1] + (b[2] - b[1]) * e;
+          b[0].setAttribute("x", X0(Math.min(b[1], end)).toFixed(1));
+          b[0].setAttribute("width", Math.max(1, Math.abs(X0(end) - X0(b[1]))).toFixed(1));
+        });
+      });
+      if (mode === "woman") note.textContent = "Held-out woman " + (idx + 1) + " of " + rowsX.length + ". The rebuilt model gives her " + score.toFixed(3) + (score > 0.5 ? ", above" : ", below") + " the cut-off of 0.5, and she " + (y[idx] ? "had diabetes." : "did not have diabetes.");
+      else note.textContent = "Inputs from the sliders at the top of the page. Move them and this chart follows.";
+    }
+    onVisible(svg, draw);
+    window.addEventListener("resize", debounce(function () { if (W && width(svg) !== W) draw(); }));
   }
 })();
