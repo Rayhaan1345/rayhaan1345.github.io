@@ -132,8 +132,8 @@
     var modeBtns = [].slice.call(document.querySelectorAll("#reader [data-mode]"));
     var seedBtns = [].slice.call(document.querySelectorAll("#reader [data-seed]"));
     // Milliseconds to read one chunk, slow to fast; the update pause is a little longer.
-    var PACE = [3200, 2300, 1600, 1100, 700], MAXV = 3.1;
-    var pace = $("rd-pace"), paceIdx = pace ? Number(pace.value) : 2;
+    var PACE = [9000, 6000, 4000, 2600, 1600, 900], MAXV = 3.1;
+    var pace = $("rd-pace"), paceIdx = pace ? Number(pace.value) : 1;
     if (pace) pace.addEventListener("input", function () { paceIdx = Number(pace.value); });
     function readMs() { return PACE[paceIdx]; }
     function updMs() { return PACE[paceIdx] * 1.1; }
