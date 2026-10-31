@@ -131,7 +131,12 @@
     var playBtn = $("rd-play"), stepBtn = $("rd-step"), resetBtn = $("rd-reset");
     var modeBtns = [].slice.call(document.querySelectorAll("#reader [data-mode]"));
     var seedBtns = [].slice.call(document.querySelectorAll("#reader [data-seed]"));
-    var READ = reduce ? 1 : 950, UPD = reduce ? 1 : 1000, MAXV = 3.1;
+    // Milliseconds to read one chunk, slow to fast; the update pause is a little longer.
+    var PACE = [3200, 2300, 1600, 1100, 700], MAXV = 3.1;
+    var pace = $("rd-pace"), paceIdx = pace ? Number(pace.value) : 2;
+    if (pace) pace.addEventListener("input", function () { paceIdx = Number(pace.value); });
+    function readMs() { return PACE[paceIdx]; }
+    function updMs() { return PACE[paceIdx] * 1.1; }
     var st = { mode: "on", seed: 0, k: 0, phase: null, p: 0, u: 0, playing: false, once: false, last: 0, raf: 0 };
     var G = null;
     var ROWS = [5, 4, 3, 2, 1, 0];   // display order, top to bottom: layer 30 down to layer 0
@@ -265,14 +270,14 @@
       var dt = Math.min(64, ts - (st.last || ts));
       st.last = ts;
       if (st.phase === "read") {
-        st.p += dt / READ;
+        st.p += dt / readMs();
         if (st.p >= 1) {
           st.p = 1;
           if (st.mode === "on" && st.k + 1 <= 7) { st.phase = "update"; st.u = 0; spawnPulses(st.k); }
           else { st.k += 1; next(); }
         }
       } else if (st.phase === "update") {
-        st.u += dt / UPD;
+        st.u += dt / updMs();
         if (st.u >= 1) { st.u = 1; st.k += 1; st.phase = null; clearPulses(); next(); }
       }
       draw();

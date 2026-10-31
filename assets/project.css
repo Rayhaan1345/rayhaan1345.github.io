@@ -99,6 +99,9 @@
 .btn[disabled] { opacity: 0.4; cursor: default; }
 .bar .label { font-size: 14px; color: var(--muted); }
 
+.pace { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+.pace input { width: 120px; accent-color: var(--teal); }
+
 .status { margin: 10px 0 0; font-size: 15px; color: var(--ink-2); min-height: 1.5em; }
 .cap { margin: 12px 0 0; font-size: 15px; line-height: 1.5; color: var(--ink-2); max-width: 52em; }
 .cap b { color: var(--ink); font-weight: 600; }
