@@ -292,7 +292,7 @@ var NeuronLab = (function () {
         if (L < 0.1 * span) { ox = 0.5 * (urange[0][0] + urange[0][1]); oy = 0.5 * (urange[1][0] + urange[1][1]); L = Math.max(0.05 * span, reach(ox, oy)); }
         var tipx = ox + dx * L, tipy = oy + dy * L;
         ann.push({ x: tipx, y: tipy, ax: ox, ay: oy, xref: "x", yref: "y", axref: "x", ayref: "y", showarrow: true, arrowhead: 3, arrowsize: 1.1, arrowwidth: 2.4, arrowcolor: P.coral, text: "" });
-        ann.push({ x: tipx, y: tipy, xref: "x", yref: "y", showarrow: false, text: "<b>w</b>", font: { color: P.coral, size: 14 }, xshift: 9, yshift: 9 });
+        ann.push({ x: tipx, y: tipy, xref: "x", yref: "y", showarrow: false, text: "<b>w</b>", font: { color: P.coral, size: 14 }, bgcolor: P.paper, borderpad: 2, xshift: 11, yshift: 11 });
       }
       if (seg) {
         var s2 = seg[0][1] >= seg[1][1] ? seg : [seg[1], seg[0]], lx = s2[0][0] * 0.88 + s2[1][0] * 0.12, ly = s2[0][1] * 0.88 + s2[1][1] * 0.12;
