@@ -32,6 +32,7 @@
   <p class="context">Interim report from a research internship at MBZUAI with Dr Salman Khan and Hanoona Rasheed</p>
   <ul class="pills">
     <li><a href="#primer">Primer</a></li>
+    <li><a href="primer/">Step-by-step primer</a></li>
     <li><a href="https://github.com/Rayhaan1345/inplace-ttt-study/blob/main/paper/main.pdf">Paper (PDF)</a></li>
     <li><a href="https://github.com/Rayhaan1345/inplace-ttt-study">Code</a></li>
     <li><a href="https://github.com/Rayhaan1345/inplace-ttt-study/blob/main/docs/results.md">Results log</a></li>
@@ -84,12 +85,13 @@
     <p class="status" id="mem-note" aria-live="polite">The matrix starts empty. Pattern A and target A are shown on its edges. Press pair A to write them in.</p>
   </div>
   <p class="cap"><b>A small fast-weight memory.</b> Teal cells are positive and coral cells negative. Writing a pair adds the target times the pattern to the matrix, one row per target value. Reading multiplies the matrix by a pattern. The two stored patterns are at right angles, so reading with one returns its own target and leaves the other alone. The numbers are made up, and a layer in the model works with thousands of dimensions.</p>
-  <p>In the model, the target comes from the layer's own input: a short causal convolution over recent tokens, passed through a learned projection. No labels are needed, so the model can learn from any text it reads. Whether these notes help is the question of this study. If they do, switching the writing off should cost accuracy.</p>
+  <p>In the model, the target comes from the layer's own input: a short convolution over the token and two neighbours on either side, passed through a learned projection. No labels are needed, so the model can learn from any text it reads. Whether these notes help is the question of this study. If they do, switching the writing off should cost accuracy.</p>
+  <p>For the full mechanics, from attention to the update and when it runs, read the <a href="primer/">step-by-step primer</a>.</p>
 </section>
 
 <section id="method" aria-labelledby="method-h">
   <h2 id="method-h">How the model reads</h2>
-  <p>In-Place TTT edits six of the 36 layers of Qwen3-4B: layers 0, 6, 12, 18, 24 and 30. In those layers the MLP down-projection <i>W</i> becomes a fast weight. The model reads its input in chunks of 4,096 tokens. After a chunk, it forms a target from a causal convolution of the layer input and passes the target through a learned projection <i>P</i>. It then applies one outer-product step, <span class="eq">W &larr; W + &eta; &Sigma;<sub>t</sub> (P<sup>&#8868;</sup> conv(x)<sub>t</sub>) h<sub>t</sub><sup>&#8868;</sup></span>, with inner learning rate &eta; = 3. The next chunk is read with the updated <i>W</i>.</p>
+  <p>In-Place TTT edits six of the 36 layers of Qwen3-4B: layers 0, 6, 12, 18, 24 and 30. In those layers the MLP down-projection <i>W</i> becomes a fast weight. The model reads its input in chunks of 4,096 tokens. After a chunk, it forms targets with a short convolution of the MLP input over five neighbouring positions and passes them through a learned projection <i>P</i>. It then applies one outer-product step, <span class="eq">W &larr; W + &eta; &Sigma;<sub>t</sub> (P<sup>&#8868;</sup> conv(x)<sub>t</sub>) h<sub>t</sub><sup>&#8868;</sup></span>, with inner learning rate &eta; = 3. The next chunk is read with the updated <i>W</i>.</p>
   <div class="card" id="reader">
     <div class="bar">
       <button type="button" class="btn" id="rd-play">Play</button>

@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>In-Place TTT Primer | Rayhaan Khan</title>
+<meta name="description" content="A step-by-step primer on In-Place Test-Time Training: attention, the KV cache, the transformer MLP, and the fast-weight update, its target, its gradient and when it runs.">
+<meta name="author" content="Rayhaan Khan">
+<meta property="og:type" content="article">
+<meta property="og:title" content="A Primer on In-Place Test-Time Training">
+<meta property="og:description" content="From attention to the fast-weight update, one step at a time.">
+<meta property="og:url" content="https://rayhaan1345.github.io/projects/in-place-ttt/primer/">
+<meta property="og:image" content="https://rayhaan1345.github.io/assets/img/ttt-overview.png">
+<link rel="icon" href="../../../favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;1,400&family=Spectral+SC:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../../assets/site.css?v=3">
+<link rel="stylesheet" href="../../../assets/project.css?v=3">
+<link rel="stylesheet" href="primer.css?v=3">
+<script>try{var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+</head>
+<body>
+<main class="proj">
+
+<p class="crumbs"><a href="../../../">Rayhaan Khan</a> &middot; <a href="../../../#research">Research</a> &middot; <a href="../">In-Place TTT</a></p>
+
+<header class="hero">
+  <h1>A Primer on In-Place Test-Time Training</h1>
+  <p class="subtitle">From attention to the fast-weight update, one step at a time</p>
+  <p class="byline"><strong>Rayhaan Khan</strong> &middot; Mumbai AI Lab</p>
+  <p class="context">Companion to the study <a href="../">In-Place Test-Time Training on Qwen3-4B</a></p>
+  <ul class="pills">
+    <li><a href="../">The study</a></li>
+    <li><a href="https://github.com/Rayhaan1345/inplace-ttt-study/blob/main/paper/main.pdf">Paper (PDF)</a></li>
+    <li><a href="https://github.com/Rayhaan1345/inplace-ttt-study">Study code</a></li>
+    <li><a href="https://github.com/ByteDance-Seed/In-Place-TTT/tree/be2324829b0e91c8fd10a74d4b43714fde6676e1">Released In-Place TTT code</a></li>
+  </ul>
+</header>
+
+<div class="tldr">
+  <p>This page builds In-Place TTT up from the ground. It starts with how a language model reads text and goes through attention and the MLP. It ends with the update the method applies, including where its gradient comes from and when it runs.</p>
+  <p>The only background needed is school algebra. A vector is a list of numbers, and a matrix is a grid of numbers that turns one vector into another. The demos use small made-up numbers. Statements about the method follow the released code, and the last section points to the lines that implement them.</p>
+</div>
+
+<nav class="toc" aria-labelledby="toc-h">
+  <h2 id="toc-h">Contents</h2>
+  <ol>
+    <li><a href="#tokens">Text becomes numbers</a></li>
+    <li><a href="#attention">Attention: looking back</a></li>
+    <li><a href="#kv">Generating text and the KV cache</a></li>
+    <li><a href="#block">The transformer block and its MLP</a></li>
+    <li><a href="#fast">Writing into a matrix</a></li>
+    <li><a href="#which">Which weight In-Place TTT changes</a></li>
+    <li><a href="#update">The target, the loss and the gradient</a></li>
+    <li><a href="#when">When the update runs</a></li>
+    <li><a href="#side">With and without TTT, step by step</a></li>
+    <li><a href="#training">Training with the module</a></li>
+    <li><a href="#terms">The study's terms</a></li>
+    <li><a href="#quiz">Check yourself</a></li>
+    <li><a href="#code">Where it lives in the code</a></li>
+  </ol>
+</nav>
+
+<section id="tokens" aria-labelledby="tokens-h">
+  <h2 id="tokens-h">Text becomes numbers</h2>
+  <p>A language model reads text as tokens. A token is a word or a piece of a word, and the model swaps it for a list of numbers called a vector. In Qwen3-4B, the model in the study, this vector has 2,560 numbers.</p>
+  <p>The vectors then pass up through a stack of 36 layers. A layer reads the vector of a token and adds a correction to it. Think of the vector as a notepad that the layers keep writing on. This running notepad is called the residual stream.</p>
+  <p>At the top, the model turns the notepad of the last token into a score for all possible next tokens. Training adjusts the weights so that the correct next token gets a high score. The weights are the numbers inside the layers' matrices, about 4 billion of them in Qwen3-4B.</p>
+  <div class="card">
+    <svg id="tok-svg" role="img" aria-label="Tokens become vectors, the layers add to them, and the top turns the last vector into scores for the next token"></svg>
+  </div>
+  <p class="cap"><b>From text to a guess.</b> A token becomes a vector, the layers add to it, and the top turns the last vector into scores for the next token. The colours show made-up numbers, teal for positive and coral for negative.</p>
+</section>
+
+<section id="attention" aria-labelledby="attention-h">
+  <h2 id="attention-h">Attention: looking back</h2>
+  <p>To guess what comes next, a token often needs facts from earlier in the text. Take &ldquo;The key is under the mat. The key&rdquo;. To continue, the last &ldquo;key&rdquo; should find the earlier sentence about the key. Attention is the step that lets a token look back and collect what it needs.</p>
+  <p>Attention gives a token three vectors, made by multiplying its notepad by three learned matrices.</p>
+  <ul>
+    <li><b>Query</b>: what this token is looking for.</li>
+    <li><b>Key</b>: what this token offers, like a label on a folder.</li>
+    <li><b>Value</b>: what this token hands over when it is picked.</li>
+  </ul>
+  <p>A token compares its query with its own key and with the keys of the tokens before it. The comparison is a dot product: multiply matching entries of the two vectors and add the results. A large dot product means a good match.</p>
+  <p>Softmax turns these scores into weights that are positive and add up to 1. The output of attention is the sum of the values, weighted by these weights. For the token at position <i>i</i>:</p>
+  <p class="eqn">a<sub>ij</sub> = softmax<sub>j</sub>( q<sub>i</sub> &middot; k<sub>j</sub> / &radic;d )<span class="sp"></span>output<sub>i</sub> = &Sigma;<sub>j &le; i</sub> a<sub>ij</sub> v<sub>j</sub></p>
+  <p>Here <i>d</i> is the length of a key vector. Dividing by &radic;<i>d</i> keeps the scores in a sensible range when <i>d</i> is large.</p>
+  <h3 class="sub-h">The causal mask</h3>
+  <p>A model that learns to predict the next token must not see it in advance. So a token looks at itself and at earlier tokens only. Before softmax, the scores for later tokens are set to minus infinity, which turns their weights into zero. This is the causal mask, and it makes the grid of weights triangular.</p>
+  <div class="card" id="att">
+    <div class="ctl">
+      <div class="group" role="group" aria-label="Causal mask">
+        <button type="button" data-mask="on" aria-pressed="true">mask on</button>
+        <button type="button" data-mask="off" aria-pressed="false">mask off</button>
+      </div>
+      <label>softer <input type="range" id="att-scale" min="0.5" max="6" step="0.5" value="3" aria-label="Sharpness of the attention scores"> sharper</label>
+    </div>
+    <svg id="att-svg" role="img" aria-label="Attention weights on a toy sentence, for a chosen token and as a full grid"></svg>
+    <p class="status" id="att-note" aria-live="polite"></p>
+  </div>
+  <p class="cap"><b>Attention on a toy sentence.</b> Tap a token or a row of the grid to make it the one doing the looking. Bars show the weights it gives to the tokens it can see. In the grid, row <i>i</i> shows the weights of token <i>i</i>. The vectors are made up and have four numbers. Switching the mask off lets tokens see the future, which a trained model never does. The slider multiplies the scores, so a sharper setting puts more weight on the best match.</p>
+  <h3 class="sub-h">Heads</h3>
+  <p>The model runs attention as several heads side by side. A head has its own query, key and value matrices, so different heads can look for different things. A final matrix mixes the outputs of the heads back into one vector for the notepad.</p>
+</section>
+
+<section id="kv" aria-labelledby="kv-h">
+  <h2 id="kv-h">Generating text and the KV cache</h2>
+  <p>The model writes one token at a time. It reads the prompt, picks a next token, adds it to the text and repeats. This happens in two phases.</p>
+  <ul>
+    <li><b>Prefill</b> reads the whole prompt in one pass, with all positions computed side by side.</li>
+    <li><b>Decoding</b> then produces the answer, one token per step.</li>
+  </ul>
+  <p>In a decoding step, the newest token needs the keys and values of all earlier tokens, in all 36 layers. Those keys and values never change, because earlier tokens never look at later ones. So the model computes them once and stores them. The store is called the KV cache.</p>
+  <p>With the cache, a step computes the query, key and value of the newest token alone. It appends the new key and value to the cache, then attends over the cache. The cache grows by one entry per token in all layers, which is why long inputs need a lot of memory.</p>
+  <div class="card" id="kvc">
+    <div class="bar">
+      <button type="button" class="btn" id="kv-play">Play</button>
+      <button type="button" class="btn" id="kv-step">Next step</button>
+      <button type="button" class="btn" id="kv-reset">Restart</button>
+      <div class="group" role="group" aria-label="Cache">
+        <button type="button" data-kv="on" aria-pressed="true">with cache</button>
+        <button type="button" data-kv="off" aria-pressed="false">without cache</button>
+      </div>
+    </div>
+    <svg id="kv-svg" role="img" aria-label="Animation of prefill and decoding, showing which keys and values are computed and which come from the cache"></svg>
+    <p class="status" id="kv-note" aria-live="polite">Press play or next step.</p>
+  </div>
+  <p class="cap"><b>Prefill, then decoding.</b> One layer is shown. Teal cells are keys and values computed in this step, and grey cells come from the cache. Without a cache, the model recomputes the keys and values of the whole text at all steps. The bars count the work so far: without a cache it grows with the square of the length.</p>
+</section>
+
+<section id="block" aria-labelledby="block-h">
+  <h2 id="block-h">The transformer block and its MLP</h2>
+  <p>A layer of the model is also called a block. It has two parts, attention and an MLP, and both add their result onto the notepad. Before both parts, a step called RMSNorm rescales the notepad to a standard size. Qwen3-4B stacks 36 of these blocks.</p>
+  <p>Attention moves information between positions. The MLP works on one position at a time. It takes the 2,560 numbers of a token's notepad, expands them to 9,728 numbers, applies a nonlinear step and compresses the result back to 2,560 numbers.</p>
+  <p>In Qwen3 the MLP has three matrices.</p>
+  <ol class="plain">
+    <li>The up projection <i>U</i> and another projection <i>G</i> both map the MLP input <i>x</i>, with 2,560 numbers, to 9,728 numbers. In the code, <i>G</i> is named <code>gate_proj</code>.</li>
+    <li>The output of <i>G</i> goes through SiLU, a smooth function that keeps large positive values and pushes negative values toward zero. The result multiplies the output of <i>U</i> entry by entry. This gives the hidden vector <i>h</i>, with 9,728 numbers.</li>
+    <li>The down projection <i>W</i>, a matrix with 2,560 rows and 9,728 columns, maps <i>h</i> back to 2,560 numbers.</li>
+  </ol>
+  <p class="eqn">h = SiLU(G x) &#8857; (U x)<span class="sp"></span>MLP(x) = W h</p>
+  <p>The symbol &#8857; means multiplying two vectors entry by entry.</p>
+  <div class="card" id="blk">
+    <svg id="blk-svg" role="img" aria-label="Diagram of one transformer block of Qwen3-4B, with the down projection highlighted"></svg>
+    <div class="step-text" id="blk-text" aria-live="polite" style="margin-top:12px"></div>
+    <div class="step-nav">
+      <button type="button" class="btn" id="blk-prev">&lsaquo; Previous</button>
+      <span class="note" id="blk-count"></span>
+      <button type="button" class="btn" id="blk-next">Next &rsaquo;</button>
+    </div>
+  </div>
+  <p class="cap"><b>One block of Qwen3-4B.</b> Step through the parts, or tap one. The down projection <i>W</i>, in teal, is the matrix that In-Place TTT turns into a fast weight in six of the 36 blocks.</p>
+
+  <h3 class="sub-h">The down projection as a memory</h3>
+  <p>There is a useful way to read <i>W h</i>. Column <i>j</i> of <i>W</i> is a vector of 2,560 numbers. The entry <i>h<sub>j</sub></i> says how strongly hidden unit <i>j</i> responds to this token. The output <i>W h</i> is the sum of the columns, with column <i>j</i> scaled by <i>h<sub>j</sub></i>.</p>
+  <p>So <i>W</i> stores 9,728 output directions, and <i>h</i> picks a mix of them. A hidden unit that responds to some pattern in the input adds its column to the notepad. For this reason, MLP layers have been described as key-value memories (Geva et al., 2021).</p>
+  <div class="card" id="mlp">
+    <div class="ctl" id="mlp-ctl"></div>
+    <svg id="mlp-svg" role="img" aria-label="The output of a toy down projection as a weighted sum of its columns"></svg>
+  </div>
+  <p class="cap"><b><i>W h</i> as a weighted sum of columns.</b> A toy <i>W</i> with six rows and four columns. Move the sliders to change <i>h</i>. The output on the right is the sum of the scaled columns.</p>
+</section>
+
+<section id="fast" aria-labelledby="fast-h">
+  <h2 id="fast-h">Writing into a matrix</h2>
+  <p>If <i>W h</i> reads a mix of columns, then adding a matrix to <i>W</i> can store something new. Take a pattern <i>h</i> and a target <i>v</i>. Their outer product <i>v h</i><sup>&#8868;</sup> is a matrix whose entry in row <i>i</i> and column <i>j</i> is <i>v<sub>i</sub> h<sub>j</sub></i>. Add it to <i>W</i>:</p>
+  <p class="eqn">W&prime; = W + v h<sup>&#8868;</sup></p>
+  <p>Now read <i>W&prime;</i> with a pattern <i>g</i>. The result is <i>W&prime; g = W g + v (h &middot; g)</i>. The new part is the target <i>v</i>, scaled by the dot product of the stored pattern and the reading pattern.</p>
+  <ul>
+    <li>If <i>g</i> equals <i>h</i>, the output moves toward <i>v</i>, scaled by the squared length of <i>h</i>.</li>
+    <li>If <i>g</i> points in a similar direction to <i>h</i>, part of <i>v</i> comes back.</li>
+    <li>If <i>g</i> is at right angles to <i>h</i>, the dot product is zero and the output does not change.</li>
+  </ul>
+  <p>Writing is adding outer products, and reading is the ordinary matrix product. A matrix used this way is called a fast weight. It changes quickly while the slow, trained weights stay put. The idea is older than transformers (Ba et al., 2016), and linear attention can be read in the same terms (Schlag et al., 2021).</p>
+  <div class="card" id="geo">
+    <div class="ctl">
+      <label>angle between <i>g</i> and <i>h</i> <input type="range" id="geo-angle" min="0" max="180" step="1" value="35"> <output id="geo-out">35&deg;</output></label>
+    </div>
+    <svg id="geo-svg" role="img" aria-label="The stored pattern, the reading pattern and how much of the target comes back"></svg>
+    <p class="status" id="geo-note" aria-live="polite"></p>
+  </div>
+  <p class="cap"><b>How much comes back.</b> Here <i>h</i> and <i>g</i> have length 1, so <i>h &middot; g</i> is the cosine of the angle between them. The part of the target that comes back follows that cosine: all of it at 0&deg;, none at 90&deg; and its opposite at 180&deg;. The <a href="../#primer">study page</a> has a matrix version of this demo.</p>
+</section>
+
+<section id="which" aria-labelledby="which-h">
+  <h2 id="which-h">Which weight In-Place TTT changes</h2>
+  <p>In-Place TTT turns the down projection <i>W</i> into a fast weight in six of the 36 blocks: layers 0, 6, 12, 18, 24 and 30, counting from 0. All other weights stay fixed while the model reads. That includes the attention and the other two MLP matrices of those six blocks.</p>
+  <p>The method reuses the down projection because it already works as a memory of the kind above. No new layer goes between the existing ones, which is what &ldquo;in place&rdquo; refers to.</p>
+  <p>A down projection in Qwen3-4B has 2,560 &times; 9,728 entries, about 24.9 million numbers. The six fast weights together come to about 149 million of the model's 4.0 billion parameters.</p>
+  <p>The method also adds two small trained parts to these six blocks to make the targets: a convolution and a projection <i>P</i>. They are trained along with the model and stay fixed at test time.</p>
+  <p>The saved model never changes. At the start of an input, the code copies the trained down projection, called <i>W</i><sub>0</sub>, and updates the copy. The next input starts again from <i>W</i><sub>0</sub>.</p>
+  <div class="card" id="stack">
+    <div class="ctl">
+      <div class="group" role="group" aria-label="Layer" id="stk-layers"></div>
+      <div class="group" role="group" aria-label="Seed" id="stk-seeds"></div>
+    </div>
+    <svg id="stk-svg" role="img" aria-label="The 36 layers of Qwen3-4B with the six fast-weight layers marked, and how far their weights moved in the study"></svg>
+    <p class="status" id="stk-note" aria-live="polite"></p>
+  </div>
+  <p class="cap"><b>Where the fast weights are.</b> Pick one of the six layers to see how far its <i>W</i> moved on held-out 32k text in the study. The numbers are the Frobenius norm of <i>W</i> &minus; <i>W</i><sub>0</sub> after the first and the seventh update, measured on eight held-out sequences. The size of <i>W</i><sub>0</sub> is between 112 and 126 on the same scale.</p>
+</section>
+
+<section id="update" aria-labelledby="update-h">
+  <h2 id="update-h">The target, the loss and the gradient</h2>
+  <p>Here is the full update in four steps. It happens in the six fast-weight layers, once per complete chunk of 4,096 tokens.</p>
+  <div class="card">
+    <ol class="flow" aria-label="The four steps of the update">
+      <li><b>Patterns</b><span>the hidden vectors <i>h<sub>t</sub></i> the MLP computes anyway</span></li>
+      <li><b>Targets</b><span>a short convolution of the MLP input, then the projection <i>P</i></span></li>
+      <li><b>Loss</b><span>how well the outputs <i>W h<sub>t</sub></i> agree with the targets</span></li>
+      <li><b>Step</b><span>one gradient step on <i>W</i> alone</span></li>
+    </ol>
+  </div>
+
+  <h3 class="sub-h">Step 1: the patterns</h3>
+  <p>While the layer reads the chunk, the MLP computes the hidden vector <i>h<sub>t</sub></i> for token <i>t</i>, as in any model. These vectors of 9,728 numbers are the patterns. In-Place TTT needs no extra work to get them.</p>
+
+  <h3 class="sub-h">Step 2: the targets</h3>
+  <p>The target starts from <i>x<sub>t</sub></i>, the vector the MLP reads after attention and RMSNorm. A convolution mixes <i>x<sub>t</sub></i> with its neighbours over a window of five positions: two before, the token itself and two after.</p>
+  <p>The convolution is depthwise. Dimension <i>k</i> of the result mixes dimension <i>k</i> of the five neighbours only, with five learned weights for that dimension. The window stops at the edges of the chunk.</p>
+  <p>The projection <i>P</i>, a learned matrix of 2,560 &times; 2,560 numbers, then mixes the dimensions. The result is the target <i>v&#770;<sub>t</sub></i>. It has 2,560 numbers, the same size as the layer's output.</p>
+  <p class="eqn">v&#770;<sub>t</sub> = P<sup>&#8868;</sup> conv(x)<sub>t</sub></p>
+  <p>Because the window reaches two tokens ahead, the target contains information about the tokens that come next. That links the update to the model's job, predicting the next token.</p>
+  <p>Looking ahead does not leak answers. The update from a chunk is applied after the whole chunk has been read, so it changes the outputs of later chunks only.</p>
+
+  <h3 class="sub-h">Step 3: the loss</h3>
+  <p>The output of the layer for token <i>t</i> is <i>W h<sub>t</sub></i>. The update uses a simple loss: minus the sum, over the chunk, of the dot products between outputs and targets.</p>
+  <p class="eqn">L(W) = &minus; &Sigma;<sub>t</sub> v&#770;<sub>t</sub> &middot; (W h<sub>t</sub>)</p>
+  <p>An output that points the same way as its target lowers the loss. No labels are involved. The targets come from the text itself, which makes this self-supervised learning.</p>
+
+  <h3 class="sub-h">Step 4: one gradient step</h3>
+  <p>The gradient of a loss with respect to <i>W</i> says how the loss changes when the entries of <i>W</i> change. For this loss it has a short closed form. Only <i>W</i> is varied here. <i>P</i>, the convolution and the rest of the network are held fixed.</p>
+  <p class="eqn">&part;L / &part;W = &minus; &Sigma;<sub>t</sub> v&#770;<sub>t</sub> h<sub>t</sub><sup>&#8868;</sup></p>
+  <p>Gradient descent moves <i>W</i> a step of size &eta; against the gradient:</p>
+  <p class="eqn">W &larr; W + &eta; &Sigma;<sub>t</sub> v&#770;<sub>t</sub> h<sub>t</sub><sup>&#8868;</sup></p>
+  <p>This is the memory write from &ldquo;Writing into a matrix&rdquo;, done for all tokens of the chunk and added up. With <i>v&#770;<sub>t</sub></i> written out, it is the update in the paper, <span class="eq">W &larr; W + &eta; &Sigma;<sub>t</sub> (P<sup>&#8868;</sup> conv(x)<sub>t</sub>) h<sub>t</sub><sup>&#8868;</sup></span>. The released code computes the sum directly with one matrix product. No backpropagation through the network runs at test time.</p>
+  <p>The step always lowers this loss on the chunk it came from. The drop equals &eta; times the sum of the squares of the entries of &Sigma;<sub>t</sub> <i>v&#770;<sub>t</sub> h<sub>t</sub></i><sup>&#8868;</sup>. The loss is linear in <i>W</i>, though, so it has no lowest point. A bigger &eta; lowers it further without limit, and the loss sets no bound on how far <i>W</i> moves. The step size &eta; decides that.</p>
+  <div class="card" id="upd">
+    <div class="bar">
+      <button type="button" class="btn" id="up-play">Play</button>
+      <button type="button" class="btn" id="up-step">Next token</button>
+      <button type="button" class="btn" id="up-reset">Restart</button>
+      <label class="pace">&eta; <input type="range" id="up-eta" min="0" max="2" step="0.1" value="1" aria-label="Step size eta"> <output id="up-eta-out">1.0</output></label>
+    </div>
+    <svg id="up-svg" role="img" aria-label="Building one update from a toy chunk: patterns, targets, the summed outer products and the loss before and after the step"></svg>
+    <p class="status" id="up-note" aria-live="polite">Press play to add the tokens of the chunk one at a time.</p>
+  </div>
+  <p class="cap"><b>Building one update.</b> A toy chunk of six tokens with four-number patterns and targets. Play adds their outer products to the sum one token at a time. The meter compares the loss on this chunk before and after the step. In the model, <i>h</i> has 9,728 numbers, <i>v&#770;</i> has 2,560 and a chunk has 4,096 tokens.</p>
+</section>
+
+<section id="when" aria-labelledby="when-h">
+  <h2 id="when-h">When the update runs</h2>
+  <p>The update runs in the six fast-weight layers, once per complete chunk of 4,096 tokens. Generation never stops to wait for it. What happens depends on the phase.</p>
+  <h3 class="sub-h">Prefill</h3>
+  <p>The prompt is read in one forward pass. Inside a fast-weight layer, the code walks through the complete chunks of the prompt in order. For a chunk, it first computes the outputs with the current <i>W</i>, then updates <i>W</i> from that chunk. The next chunk is read with the new <i>W</i>.</p>
+  <p>A partial chunk left at the end is read with the latest <i>W</i> and gets no update yet. Its patterns and targets are kept in the cache.</p>
+  <h3 class="sub-h">Decoding</h3>
+  <p>The pattern and target of a new token join the partial chunk in the cache. While the partial chunk is shorter than 4,096 tokens, the token is read with the current <i>W</i>. When the new token completes the chunk, the layer computes the update inside the same step. That token is read with the old <i>W</i>, and the tokens after it use the new one.</p>
+  <p>So once generation completes a chunk, the update also learns from text the model wrote itself.</p>
+  <h3 class="sub-h">Short and long prompts</h3>
+  <p>A prompt shorter than 4,096 tokens triggers no update during prefill. RULER at 4k is such a case, so the study's 4k results measure the training effect alone. A prompt of 32,000 tokens contains seven complete chunks, or 28,672 tokens, and a partial one. Prefill then applies seven updates.</p>
+  <div class="card" id="tl">
+    <div class="ctl">
+      <label>prompt <input type="range" id="tl-len" min="1000" max="70000" step="500" value="32000" aria-label="Prompt length in tokens"> <output id="tl-len-out">32,000</output></label>
+      <label>generated <input type="range" id="tl-gen" min="1" max="8192" step="1" value="64" aria-label="Generated tokens"> <output id="tl-gen-out">64</output></label>
+    </div>
+    <div class="bar">
+      <button type="button" class="btn" id="tl-play">Play</button>
+      <button type="button" class="btn" id="tl-next">Next chunk</button>
+      <button type="button" class="btn" id="tl-reset">Restart</button>
+    </div>
+    <svg id="tl-svg" role="img" aria-label="Two timelines of the same input, read without and with In-Place TTT, with the points where updates fire"></svg>
+    <p class="status" id="tl-note" aria-live="polite"></p>
+  </div>
+  <p class="cap"><b>The same input, read twice.</b> Both models read the same prompt and generate the same tokens. Dashed lines mark chunk boundaries, and teal marks show where an update fires in the TTT lane. Labels show which version of <i>W</i> reads a chunk. The last generated token is never read back into the model, so it cannot complete a chunk.</p>
+</section>
+
+<section id="side" aria-labelledby="side-h">
+  <h2 id="side-h">With and without TTT, step by step</h2>
+  <p>The two models follow the same steps, except in the six fast-weight layers. The shaded cells are where In-Place TTT differs.</p>
+  <table class="side">
+    <thead><tr><th scope="col">Step</th><th scope="col">Without TTT</th><th scope="col">With In-Place TTT</th></tr></thead>
+    <tbody>
+      <tr><th scope="row">Load the model</th><td data-h="Without TTT">The trained weights.</td><td class="ttt" data-h="With TTT">The trained weights, plus the convolution and <i>P</i> in six layers. A working copy <i>W</i> = <i>W</i><sub>0</sub> of the six down projections.</td></tr>
+      <tr><th scope="row">Prefill, the other 30 layers</th><td data-h="Without TTT">Attention and MLP with fixed weights.</td><td data-h="With TTT">The same.</td></tr>
+      <tr><th scope="row">Prefill, the six fast-weight layers</th><td data-h="Without TTT">Attention and MLP with fixed weights.</td><td class="ttt" data-h="With TTT">Attention as usual. The MLP reads the prompt chunk by chunk. After a complete chunk, <i>W</i> &larr; <i>W</i> + &eta; &Sigma; <i>v&#770;<sub>t</sub> h<sub>t</sub></i><sup>&#8868;</sup>.</td></tr>
+      <tr><th scope="row">KV cache</th><td data-h="Without TTT">Keys and values of earlier tokens.</td><td class="ttt" data-h="With TTT">Keys and values, plus, in the six layers, the patterns and targets of the partial chunk and the current <i>W</i>.</td></tr>
+      <tr><th scope="row">A decoding step</th><td data-h="Without TTT">Query, key and value of the new token, attention over the cache, then the MLP.</td><td class="ttt" data-h="With TTT">The same, and in the six layers the token joins the partial chunk. If it completes a chunk, <i>W</i> updates within this step.</td></tr>
+      <tr><th scope="row">The next input</th><td data-h="Without TTT">Clear the cache.</td><td class="ttt" data-h="With TTT">Clear the cache and the working copies. <i>W</i> starts again from <i>W</i><sub>0</sub>.</td></tr>
+      <tr><th scope="row">Training</th><td data-h="Without TTT">Next-token loss, with gradients through the network.</td><td class="ttt" data-h="With TTT">The same loss. Gradients also flow through the updates into the convolution, <i>P</i> and the shared weights.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="training" aria-labelledby="training-h">
+  <h2 id="training-h">Training with the module</h2>
+  <p>At test time only <i>W</i> moves, by the closed-form step. The other parts of the module are learned during training, when the model learns which notes are worth writing.</p>
+  <p>Training uses the usual next-token loss. The updates are part of the forward pass, so the gradient of that loss flows back through them. It reaches the convolution and <i>P</i>, which decide what gets written. It also reaches the shared weights, which decide the patterns.</p>
+  <p>For speed, training computes the updates of all chunks at once. <i>W</i> for chunk <i>k</i> is <i>W</i><sub>0</sub> plus &eta; times the sum of the updates from the chunks before it. This running sum gives the same result as the chunk-by-chunk loop of inference.</p>
+  <p class="eqn">W<sub>k</sub> = W<sub>0</sub> + &eta; &Sigma;<sub>s &lt; k</sub> &Delta;W<sub>s</sub><span class="sp"></span>&Delta;W<sub>s</sub> = &Sigma;<sub><span class="up">t in chunk</span> s</sub> v&#770;<sub>t</sub> h<sub>t</sub><sup>&#8868;</sup></p>
+  <p>At the start of training the convolution is all zeros. The targets and updates are then zero, so the model computes what the base model computes. In the released code, <i>P</i> starts as a diagonal matrix with small random entries.</p>
+  <p>This part of the method is where the study found the gains. Evaluated with the update off, the TTT-trained checkpoint keeps its lead over the control. Training with the module changed the shared weights, and that change explains the gains. The module also changed training itself. The gradient norm of the TTT arm was 100 to 1,000 times the control's, almost all of it in the six small convolutions. See <a href="../#training">how the module changes training</a> on the study page.</p>
+</section>
+
+<section id="terms" aria-labelledby="terms-h">
+  <h2 id="terms-h">The study's terms</h2>
+  <dl class="terms">
+    <dt>Control</dt><dd>The same model, trained on the same data in the same order, with the module switched off.</dd>
+    <dt>TTT arm</dt><dd>The model trained with the module and evaluated as released, with &eta; = 3.</dd>
+    <dt>Update off</dt><dd>The TTT checkpoint evaluated again with &eta; = 0. The fast weights never leave <i>W</i><sub>0</sub>, and the outputs match those of a model without the module.</dd>
+    <dt>Update effect</dt><dd>TTT minus update off, on the same questions. It measures adapting at test time.</dd>
+    <dt>Training effect</dt><dd>Update off minus control. It measures training with the module.</dd>
+    <dt>TTT minus control</dt><dd>The sum of the two effects. Averaged over seeds at 64k with plain RoPE, +3.2 = +0.1 + 3.1 RULER points. At 64k with YaRN, &minus;1.7 = &minus;2.5 + 0.8.</dd>
+    <dt>Both seeds</dt><dd>The study trained both arms twice, with two data orders called seeds 1 and 2. &ldquo;Both seeds&rdquo; averages the two per question, which is the estimate the decision rule uses.</dd>
+    <dt>Inner learning rate &eta;</dt><dd>The step size of the test-time update: 3 in the released recipe. The study also tried 0, 1 and 6 at inference.</dd>
+    <dt>Chunk size</dt><dd>The number of tokens between updates: 4,096 as released. The study also trained with 512 and 1,024.</dd>
+    <dt>Clipping &tau;</dt><dd>A rule that shrinks the update of a chunk when its Frobenius norm is above &tau;. The paper reports &tau; = 10<sup>&minus;5</sup>, while measured single-chunk updates have norms of 0.1 to 0.85. Clipping at &tau; shrinks them by a factor of 10,000 or more, which switches the update off in effect. The released code applies no clipping.</dd>
+    <dt>Frobenius norm</dt><dd>The size of a matrix: the square root of the sum of the squares of its entries.</dd>
+    <dt>RoPE and YaRN</dt><dd>RoPE encodes the position of a token by rotating its query and key vectors. YaRN stretches those rotations so that a model trained on 32k tokens can read 64k.</dd>
+    <dt>RULER</dt><dd>A benchmark of 13 long-context tasks, such as finding a planted fact in a long text.</dd>
+  </dl>
+</section>
+
+<section id="quiz" aria-labelledby="quiz-h">
+  <h2 id="quiz-h">Check yourself</h2>
+  <p>Questions on the ideas above. Tap a question to see the answer.</p>
+  <div class="qa">
+    <details><summary>Which weights change while the model reads?</summary><p>The MLP down projections <i>W</i> in layers 0, 6, 12, 18, 24 and 30. All other weights stay fixed, including the convolution and <i>P</i>.</p></details>
+    <details><summary>What is a target made from?</summary><p>The MLP input <i>x</i> of the same layer. A depthwise convolution mixes it over five neighbouring positions, two before and two after, and the result is multiplied by <i>P</i><sup>&#8868;</sup>.</p></details>
+    <details><summary>Where does the gradient come from?</summary><p>From the inner loss <i>L(W) = &minus;&Sigma;<sub>t</sub> v&#770;<sub>t</sub> &middot; (W h<sub>t</sub>)</i>, differentiated with respect to <i>W</i> alone. The gradient is <i>&minus;&Sigma;<sub>t</sub> v&#770;<sub>t</sub> h<sub>t</sub></i><sup>&#8868;</sup>, so the step is a sum of outer products. No backpropagation through the network runs at test time.</p></details>
+    <details><summary>Does generation stop after 4,096 tokens to update <i>W</i>?</summary><p>No. During prefill the updates run inside the single pass over the prompt. During decoding the update is a few matrix products inside the step that completes a chunk.</p></details>
+    <details><summary>Can the update from a chunk help predict tokens inside the same chunk?</summary><p>No. A chunk is read with the <i>W</i> from before its own update. That is why the targets can look two tokens ahead without leaking answers.</p></details>
+    <details><summary>Why are the 4k results the same with the update on and off?</summary><p>A 4k prompt is shorter than one chunk, so no update reaches the text the model reads. The 4k comparison with the control therefore measures the training effect alone.</p></details>
+    <details><summary>What does &eta; = 0 do?</summary><p>It makes the update zero. <i>W</i> stays at <i>W</i><sub>0</sub>, and the model computes what a model without the module computes. The study uses this to switch the update off without retraining.</p></details>
+    <details><summary>Do fast weights stay from one document to the next?</summary><p>No. A new input starts from <i>W</i><sub>0</sub>, and the saved model never changes.</p></details>
+    <details><summary>How are the convolution and <i>P</i> learned?</summary><p>During training, through the next-token loss. The updates are part of the forward pass, so gradients flow through them into the convolution, <i>P</i> and the shared weights.</p></details>
+    <details><summary>What does the KV cache store, and what does In-Place TTT add to it?</summary><p>The keys and values of earlier tokens, in all layers. In the six fast-weight layers, In-Place TTT adds the patterns and targets of the partial chunk and the current <i>W</i>.</p></details>
+    <details><summary>The step always lowers the inner loss. Why is that no guarantee of better answers?</summary><p>The drop is &eta; times the squared Frobenius norm of <i>&Sigma;<sub>t</sub> v&#770;<sub>t</sub> h<sub>t</sub></i><sup>&#8868;</sup>, which is never negative. The loss is linear in <i>W</i> and has no minimum, so &eta; alone decides how far <i>W</i> moves. In the study, the unclipped update lowered accuracy at 64k with YaRN.</p></details>
+    <details><summary>What did the study find?</summary><p>Averaged over seeds, switching the update off changes the RULER mean by at most 0.4 points up to 64k with plain RoPE. At 64k with YaRN, the update costs 2.5 points. The gains over the control come from training with the module.</p></details>
+  </div>
+</section>
+
+<section id="code" aria-labelledby="code-h">
+  <h2 id="code-h">Where it lives in the code</h2>
+  <p>The released implementation, at the commit the study pins, puts the method in two copies of the Qwen3 model file. Links open the lines on GitHub.</p>
+  <ul class="codemap">
+    <li><b><a href="https://github.com/ByteDance-Seed/In-Place-TTT/blob/be2324829b0e91c8fd10a74d4b43714fde6676e1/inference_model/hf_qwen3/modeling_qwen3.py#L83-L106">Qwen3MLP set-up</a></b>: the projection <code>ttt_proj</code> (<i>P</i>), the step size <code>ttt_lr</code> (&eta;) and the depthwise <code>ttt_conv</code> with a window of five and padding of two.</li>
+    <li><b><a href="https://github.com/ByteDance-Seed/In-Place-TTT/blob/be2324829b0e91c8fd10a74d4b43714fde6676e1/inference_model/hf_qwen3/modeling_qwen3.py#L117-L152">Qwen3MLP.forward, inference</a></b>: the chunk loop. A chunk is read with the current weight, then <code>dw</code> is added if the chunk is complete.</li>
+    <li><b><a href="https://github.com/ByteDance-Seed/In-Place-TTT/blob/be2324829b0e91c8fd10a74d4b43714fde6676e1/inference_model/hf_qwen3/modeling_qwen3.py#L345-L377">Qwen3DecoderLayer.forward, inference</a></b>: the target starts from the MLP input, and the partial chunk and current weight are kept in the cache between steps.</li>
+    <li><b><a href="https://github.com/ByteDance-Seed/In-Place-TTT/blob/be2324829b0e91c8fd10a74d4b43714fde6676e1/inference_model/hf_qwen3/modeling_qwen3.py#L53-L59">TTTDynamicCache</a></b>: the KV cache with the extra fast-weight state for a layer.</li>
+    <li><b><a href="https://github.com/ByteDance-Seed/In-Place-TTT/blob/be2324829b0e91c8fd10a74d4b43714fde6676e1/hf_models/hf_qwen3/modeling_qwen3.py#L108-L138">Qwen3MLP.forward, training</a></b>: all chunk updates at once, combined with a running sum, with gradients flowing through.</li>
+    <li><b><a href="https://github.com/ByteDance-Seed/In-Place-TTT/blob/be2324829b0e91c8fd10a74d4b43714fde6676e1/hf_models/hf_qwen3/modeling_qwen3.py#L361-L408">Initialisation</a></b>: the convolution starts at zero and <i>P</i> as a diagonal matrix with small random entries.</li>
+    <li><b><a href="https://github.com/Rayhaan1345/inplace-ttt-study/blob/main/configs/train/ttt_on.yaml">The study's configuration</a></b>: layers 0, 6, 12, 18, 24 and 30, &eta; = 3 and chunks of 4,096 tokens.</li>
+  </ul>
+  <h3 class="sub-h">Further reading</h3>
+  <ol class="refs">
+    <li>Vaswani et al. (2017). Attention Is All You Need. <i>NeurIPS</i>.</li>
+    <li>Geva, Schuster, Berant and Levy (2021). Transformer Feed-Forward Layers Are Key-Value Memories. <i>EMNLP</i>.</li>
+    <li>Ba, Hinton, Mnih, Leibo and Ionescu (2016). Using Fast Weights to Attend to the Recent Past. <i>arXiv:1610.06258</i>.</li>
+    <li>Schlag, Irie and Schmidhuber (2021). Linear Transformers Are Secretly Fast Weight Programmers. <i>arXiv:2102.11174</i>.</li>
+    <li>Sun et al. (2020). Test-Time Training with Self-Supervision for Generalization under Distribution Shifts. <i>ICML</i>.</li>
+    <li>Sun et al. (2024). Learning to (Learn at Test Time): RNNs with Expressive Hidden States. <i>arXiv:2407.04620</i>.</li>
+    <li>Feng et al. (2026). In-Place Test-Time Training. <i>ICLR</i>.</li>
+  </ol>
+</section>
+
+<footer>
+  <span><a href="../">&larr; The study</a> &middot; <a class="mail mail-sm" href="#code" data-n="yar" data-d="ni.baliam" aria-label="Email Rayhaan" title="Write an email"><span class="mail-art"><img src="../../../assets/img/email.png" alt="" width="1008" height="124"></span></a></span>
+  <span><button type="button" class="theme-toggle" id="theme-toggle">dark mode</button></span>
+</footer>
+
+</main>
+<script src="../../../assets/site.js?v=3" defer></script>
+<script src="primer.js?v=3" defer></script>
+</body>
+</html>

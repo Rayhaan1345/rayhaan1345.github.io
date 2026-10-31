@@ -31,6 +31,7 @@
   <p class="byline"><strong>Rayhaan Khan</strong>, Shadab Khan</p>
   <p class="context">Under review at Transactions on Machine Learning Research (TMLR) &middot; research internship at ADIA Lab, April 2025 to June 2026</p>
   <ul class="pills">
+    <li><a href="primer/">Primer</a></li>
     <li><a href="https://drive.google.com/file/d/1VI6MjFcu0oSlswk5wuyVrYFZPcKXPKhP/view">Manuscript and supplement (PDF)</a></li>
     <li><a href="#cite">Cite</a></li>
   </ul>
@@ -39,6 +40,7 @@
 <div class="tldr">
   <p>Public language models are released as weights. The AdamW optimizer that trained them also kept two running averages per weight, a first moment <i>m</i> and a second moment <i>v</i>, and releases leave both out. Continued pre-training on new data therefore starts AdamW from zero. Its first steps are full-sized in all directions, the training loss jumps, and the model forgets part of what it knew.</p>
   <p>We show that about 200 AdamW steps on public text, at a learning rate too small to move the weights, rebuild the useful part of that state. Warm-starting from it removes the early jump. Using the rebuilt <i>v</i> as an elastic weight consolidation (EWC) anchor reduces forgetting. At 7B parameters, where the original buffers are public, the rebuilt estimate protects the model better than the original.</p>
+  <p>New to optimizers? <a href="primer/">The primer</a> builds up the ideas behind this page one step at a time, from a single gradient step to the recipe.</p>
 </div>
 
 <div class="stats" role="list">

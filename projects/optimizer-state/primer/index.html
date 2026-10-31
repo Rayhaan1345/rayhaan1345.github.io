@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Optimizer State Primer | Rayhaan Khan</title>
+<meta name="description" content="A step-by-step primer on gradient descent, Adam and AdamW, optimizer state, the cold-start jump, forgetting and elastic weight consolidation, and how the manuscript rebuilds the optimizer state from a weights-only checkpoint.">
+<meta name="author" content="Rayhaan Khan">
+<meta property="og:type" content="article">
+<meta property="og:title" content="A Primer on Rebuilt Optimizer State">
+<meta property="og:description" content="From a single gradient step to the recipe in the manuscript, one idea at a time.">
+<meta property="og:url" content="https://rayhaan1345.github.io/projects/optimizer-state/primer/">
+<meta property="og:image" content="https://rayhaan1345.github.io/projects/optimizer-state/img/overview.png">
+<link rel="icon" href="../../../favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;1,400&family=Spectral+SC:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../../assets/site.css?v=3">
+<link rel="stylesheet" href="../../../assets/project.css?v=3">
+<link rel="stylesheet" href="primer.css?v=1">
+<script>try{var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+</head>
+<body>
+<main class="proj">
+
+<p class="crumbs"><a href="../../../">Rayhaan Khan</a> &middot; <a href="../../../#research">Research</a> &middot; <a href="../">Rebuilt optimizer state</a></p>
+
+<header class="hero">
+  <h1>A Primer on Rebuilt Optimizer State</h1>
+  <p class="subtitle">From a single gradient step to the recipe in the manuscript, one idea at a time</p>
+  <p class="context">A study guide to the manuscript by Rayhaan Khan and Shadab Khan, under review at TMLR</p>
+  <ul class="pills">
+    <li><a href="../">Project page</a></li>
+    <li><a href="https://drive.google.com/file/d/1VI6MjFcu0oSlswk5wuyVrYFZPcKXPKhP/view">Manuscript (PDF)</a></li>
+    <li><a href="#glossary">Glossary</a></li>
+  </ul>
+</header>
+
+<div class="tldr">
+  <p>This page builds the ideas behind the manuscript from the ground up. It assumes school algebra and the idea of a slope. A section adds one idea, and the widgets let you change the inputs and watch what happens.</p>
+  <p>The toys use made-up numbers and say so. Numbers about the language models come from the manuscript and its supplement. Questions at the end of most sections help with revision, and the glossary at the bottom collects the terms.</p>
+</div>
+
+<nav class="toc" aria-label="Contents">
+  <ol>
+    <li><a href="#s-step">Training in one picture</a></li>
+    <li><a href="#s-avg">Noisy gradients and two running averages</a></li>
+    <li><a href="#s-build">Building AdamW piece by piece</a></li>
+    <li><a href="#s-eps">When epsilon matters</a></li>
+    <li><a href="#s-state">What the optimizer state is</a></li>
+    <li><a href="#s-cold">The cold restart</a></li>
+    <li><a href="#s-forget">Forgetting, and springs that resist it</a></li>
+    <li><a href="#s-rebuild">Rebuilding the state</a></li>
+    <li><a href="#s-check">Checking against the true state</a></li>
+    <li><a href="#s-results">Reading the results</a></li>
+    <li><a href="#s-mine">My part</a></li>
+  </ol>
+</nav>
+
+<!-- 1 -->
+<section id="s-step" aria-labelledby="s-step-h">
+  <h2 id="s-step-h">Training in one picture</h2>
+  <p>A neural network is a long list of adjustable numbers called weights, or parameters. GPT-2 Small has 124 million of them, and LLaMA-3 8B has about 8 billion.</p>
+  <p>Training needs one number that says how badly the model is doing. This number is the <b>loss</b>. For a language model, the loss is the average surprise at the next token of text, measured in <b>nats</b>, the unit that comes from natural logarithms. If the loss is 2 nats, the geometric average of the probabilities the model gave to the correct tokens is e<sup>&minus;2</sup>, about 0.14. Lower is better.</p>
+  <p>Picture the loss as a landscape. The position is the setting of the weights, and the height is the loss. Training walks downhill. The <b>gradient</b> <i>g</i> is the slope at the current point, with one number per weight. It points uphill, so a training step goes the other way:</p>
+  <div class="eqn"><i>&theta;</i> &larr; <i>&theta;</i> &minus; <i>&eta;</i> <i>g</i></div>
+  <p>Here <i>&theta;</i> (theta) is shorthand for all the weights, and <i>&eta;</i> (eta) is the <b>learning rate</b>, a small positive number that sets the length of the step. A small rate makes slow progress. A large one overshoots the bottom and ends up on the far side.</p>
+  <div class="card" id="w-gd">
+    <div class="bar">
+      <button type="button" class="btn" id="gd-step">Take a step</button>
+      <button type="button" class="btn" id="gd-play">Ten steps</button>
+      <button type="button" class="btn" id="gd-reset">Reset</button>
+      <label class="ctl">learning rate <i>&eta;</i> <input type="range" id="gd-lr" min="0.1" max="2.4" step="0.05" value="0.4"> <output id="gd-lr-out">0.40</output></label>
+    </div>
+    <svg id="gd-svg" role="img" aria-label="A ball on a bowl-shaped loss curve, moving by gradient steps"></svg>
+    <p class="status" id="gd-note" aria-live="polite"></p>
+  </div>
+  <p class="cap"><b>A one-weight toy.</b> The loss is <i>L</i>(<i>&theta;</i>) = &frac12;<i>&theta;</i><sup>2</sup>, so the slope is <i>&theta;</i> itself and a step multiplies <i>&theta;</i> by 1 &minus; <i>&eta;</i>. With <i>&eta;</i> below 1 the ball approaches the bottom from one side. Between 1 and 2 it overshoots and still settles, and above 2 the steps grow without limit. The dashed line is the slope at the ball.</p>
+  <details class="check"><summary>Check yourself: what happens to the step when the slope doubles?</summary>
+    <p>The step doubles too, because the step is <i>&eta;</i> times the gradient. Plain gradient descent moves farther where the landscape is steeper. Adam, later on this page, changes this.</p></details>
+</section>
+
+<!-- 2 -->
+<section id="s-avg" aria-labelledby="s-avg-h">
+  <h2 id="s-avg-h">Noisy gradients and two running averages</h2>
+  <p>The full loss averages over all the training text, which is far too much work for one step. <b>Stochastic gradient descent</b> (SGD) estimates the gradient from a small random <b>batch</b> of text instead. The estimate is right on average, and off by a random amount on any one batch.</p>
+  <p>Near the bottom of a valley the true slope is close to zero, so a batch gradient there is mostly noise. Keep this in mind for later: a trained checkpoint is near a bottom.</p>
+  <p>Adam keeps two running averages for all weights. The <b>first moment</b> <i>m</i> follows the average gradient. The <b>second moment</b> <i>v</i> follows the average squared gradient.</p>
+  <div class="eqn"><i>m</i><sub>t</sub> = <i>&beta;</i><sub>1</sub> <i>m</i><sub>t&minus;1</sub> + (1 &minus; <i>&beta;</i><sub>1</sub>) <i>g</i><sub>t</sub><br><i>v</i><sub>t</sub> = <i>&beta;</i><sub>2</sub> <i>v</i><sub>t&minus;1</sub> + (1 &minus; <i>&beta;</i><sub>2</sub>) <i>g</i><sub>t</sub><sup>2</sup></div>
+  <p>The subscript <i>t</i> counts steps. The numbers <i>&beta;</i><sub>1</sub> and <i>&beta;</i><sub>2</sub> (beta one and beta two) are just below 1 and set the length of the memory. All five models in the manuscript use <i>&beta;</i><sub>1</sub> = 0.9 and <i>&beta;</i><sub>2</sub> = 0.95. A running average with factor <i>&beta;</i> remembers roughly the last 1/(1 &minus; <i>&beta;</i>) steps, so about 10 steps for <i>m</i> and about 20 for <i>v</i>.</p>
+  <p>Squaring removes the sign, so <i>v</i> measures how large the gradient tends to be, whichever way it points. Its square root &radic;<i>v</i> is the typical size of the gradient for that weight.</p>
+  <p>Both averages start at zero, so for the first few steps they come out too small. <b>Bias correction</b> divides by 1 &minus; <i>&beta;</i><sup>t</sup> to undo this:</p>
+  <div class="eqn"><i>m&#770;</i><sub>t</sub> = <i>m</i><sub>t</sub> / (1 &minus; <i>&beta;</i><sub>1</sub><sup>t</sup>) &emsp; <i>v&#770;</i><sub>t</sub> = <i>v</i><sub>t</sub> / (1 &minus; <i>&beta;</i><sub>2</sub><sup>t</sup>)</div>
+  <p>The hat marks a corrected value. At <i>t</i> = 1 the correction turns <i>m&#770;</i> into <i>g</i><sub>1</sub> and <i>v&#770;</i> into <i>g</i><sub>1</sub><sup>2</sup>. As <i>t</i> grows, <i>&beta;</i><sup>t</sup> shrinks toward 0 and the correction fades.</p>
+  <div class="card" id="w-ema">
+    <div class="bar">
+      <button type="button" class="btn" id="ema-play">Play</button>
+      <label class="ctl">step <input type="range" id="ema-t" min="1" max="80" step="1" value="80"> <output id="ema-t-out">80</output></label>
+      <div class="group" role="group" aria-label="Bias correction">
+        <button type="button" data-bc="on" aria-pressed="true">bias correction on</button>
+        <button type="button" data-bc="off" aria-pressed="false">off</button>
+      </div>
+    </div>
+    <svg id="ema-svg" role="img" aria-label="Noisy gradients for one weight, with the running averages m and the square root of v"></svg>
+    <p class="status" id="ema-note" aria-live="polite"></p>
+  </div>
+  <p class="cap"><b>One weight's memory, with made-up numbers.</b> Dots are batch gradients: an average of 0.4 plus noise of typical size 1. The teal line is <i>m&#770;</i>, which settles near the average gradient. The navy line is &radic;<i>v&#770;</i>, which settles near the typical size, about 1.08. With bias correction off, both start near zero and take many steps to climb. Their ratio <i>m&#770;</i>/&radic;<i>v&#770;</i> is the size of an Adam step in units of <i>&eta;</i>, as the next section shows.</p>
+  <details class="check"><summary>Check yourself: with <i>&beta;</i><sub>2</sub> = 0.95, about how many recent steps does <i>v</i> remember?</summary>
+    <p>About 1/(1 &minus; 0.95) = 20 steps. Older squared gradients still count, with weights that shrink by a factor of 0.95 per step.</p></details>
+  <details class="check"><summary>Check yourself: why does Adam need bias correction?</summary>
+    <p>Because <i>m</i> and <i>v</i> start at zero. After one step, <i>m</i> is only 0.1 <i>g</i> and <i>v</i> is only 0.05 <i>g</i><sup>2</sup>. Dividing by 1 &minus; <i>&beta;</i><sup>t</sup> scales them back up to the size of the gradients seen so far.</p></details>
+</section>
+
+<!-- 3 -->
+<section id="s-build" aria-labelledby="s-build-h">
+  <h2 id="s-build-h">Building AdamW piece by piece</h2>
+  <p>The widget runs an optimizer on a problem with two weights. The loss is a long narrow valley, steep across and gentle along, and the gradients include noise as they would from small batches. A stage adds one ingredient. The faint dashed path is the previous stage, for comparison.</p>
+  <div class="card" id="w-build">
+    <div class="steps-tabs" role="tablist" aria-label="Optimizer stages" id="bd-tabs"></div>
+    <div class="step-text" id="bd-text" aria-live="polite"></div>
+    <div class="eqn eqn-card" id="bd-eq"></div>
+    <svg id="bd-svg" role="img" aria-label="Optimizer paths on a narrow valley, with the loss over steps"></svg>
+    <div class="step-nav">
+      <button type="button" class="btn" id="bd-prev">&lsaquo; Previous</button>
+      <button type="button" class="btn" id="bd-play">Play this stage</button>
+      <button type="button" class="btn" id="bd-next">Next &rsaquo;</button>
+    </div>
+  </div>
+  <p class="cap"><b>A two-weight toy with made-up numbers.</b> The valley is 75 times steeper across than along. Stages 1 and 2 use <i>&eta;</i> = 0.055, close to the largest rate at which plain SGD stays stable here. From stage 3 the step is measured in units of <i>&eta;</i>, and the widget uses <i>&eta;</i> = 0.07. All stages see the same sequence of noise. The weight decay in stage 6 is 0.8, chosen large so the effect is visible; the models in the manuscript use 0.01 or 0.1.</p>
+  <p>Put together, one AdamW step for a weight reads:</p>
+  <div class="eqn"><i>g</i><sub>t</sub> = gradient at <i>&theta;</i><sub>t&minus;1</sub><br>
+    <i>m</i><sub>t</sub> = <i>&beta;</i><sub>1</sub> <i>m</i><sub>t&minus;1</sub> + (1 &minus; <i>&beta;</i><sub>1</sub>) <i>g</i><sub>t</sub> &emsp; <i>v</i><sub>t</sub> = <i>&beta;</i><sub>2</sub> <i>v</i><sub>t&minus;1</sub> + (1 &minus; <i>&beta;</i><sub>2</sub>) <i>g</i><sub>t</sub><sup>2</sup><br>
+    <i>m&#770;</i><sub>t</sub> = <i>m</i><sub>t</sub> / (1 &minus; <i>&beta;</i><sub>1</sub><sup>t</sup>) &emsp; <i>v&#770;</i><sub>t</sub> = <i>v</i><sub>t</sub> / (1 &minus; <i>&beta;</i><sub>2</sub><sup>t</sup>)<br>
+    <i>&theta;</i><sub>t</sub> = <i>&theta;</i><sub>t&minus;1</sub> &minus; <i>&eta;</i> &middot; ( <i>m&#770;</i><sub>t</sub> / (<span class="rad">&radic;<span class="ov"><i>v&#770;</i><sub>t</sub></span></span> + <i>&epsilon;</i>) + <i>w</i> <i>&theta;</i><sub>t&minus;1</sub> )</div>
+  <p>The step for a weight is about <i>&eta;</i> times the ratio <i>m&#770;</i>/&radic;<i>v&#770;</i>. When the gradient is steady, the ratio is close to 1. When the gradient is mostly noise, the average <i>m&#770;</i> is small next to the typical size &radic;<i>v&#770;</i>, and Adam takes a small step. That second case describes most weights at a trained checkpoint.</p>
+  <details class="check"><summary>Check yourself: what does the W in AdamW change?</summary>
+    <p>It applies weight decay outside the division by &radic;<i>v&#770;</i>. All weights shrink toward zero by the same fraction <i>&eta;</i><i>w</i> per step. In plain Adam with an L2 penalty, the decay term would be divided by &radic;<i>v&#770;</i> along with the gradient, so weights with large gradients would barely decay.</p></details>
+  <details class="check"><summary>Check yourself: why does dividing by &radic;<i>v&#770;</i> help on a narrow valley?</summary>
+    <p>Across the valley the gradients are large, so &radic;<i>v&#770;</i> is large and the step shrinks. Along the valley the gradients are small, so &radic;<i>v&#770;</i> is small and the step grows. Both directions move at a similar pace, roughly <i>&eta;</i> per step, instead of one learning rate fitting neither.</p></details>
+</section>
+
+<!-- 4 -->
+<section id="s-eps" aria-labelledby="s-eps-h">
+  <h2 id="s-eps-h">When epsilon matters</h2>
+  <p>Adam divides by &radic;<i>v&#770;</i> + <i>&epsilon;</i>. With <i>&epsilon;</i> = 10<sup>&minus;8</sup> and a gradient of size 10<sup>&minus;3</sup>, the <i>&epsilon;</i> term is 100,000 times smaller than &radic;<i>v&#770;</i> and barely changes the step. For a weight whose gradients are tiny, near <i>&epsilon;</i> or below, <i>&epsilon;</i> becomes the larger term and shrinks the step.</p>
+  <div class="card" id="w-eps">
+    <div class="bar">
+      <label class="ctl">gradient size <input type="range" id="eps-g" min="-11" max="-3" step="0.1" value="-7"> <output id="eps-g-out">10&minus;7</output></label>
+    </div>
+    <svg id="eps-svg" role="img" aria-label="Adam's step size against gradient size for two values of epsilon"></svg>
+    <p class="status" id="eps-note" aria-live="polite"></p>
+  </div>
+  <p class="cap"><b>Step size for a steady gradient</b>, in units of <i>&eta;</i>. With a steady gradient <i>g</i>, <i>m&#770;</i> = <i>g</i> and &radic;<i>v&#770;</i> = |<i>g</i>|, so the step is |<i>g</i>| / (|<i>g</i>| + <i>&epsilon;</i>). The horizontal axis is logarithmic.</p>
+  <p>Most of the models in the manuscript were trained with <i>&epsilon;</i> = 10<sup>&minus;8</sup>. Qwen2.5-3B used 10<sup>&minus;6</sup>, a hundred times larger. The rebuilt state goes into this same division, so the recovery must use the model's own <i>&epsilon;</i>. With the wrong one, the rebuilt state has the wrong scale for weights with small gradients, and no error message appears (supplement, Sections A.1 and F.4).</p>
+</section>
+
+<!-- 5 -->
+<section id="s-state" aria-labelledby="s-state-h">
+  <h2 id="s-state-h">What the optimizer state is</h2>
+  <p>The <b>optimizer state</b> is what AdamW keeps between steps: <i>m</i> and <i>v</i> for all weights, and the step counter <i>t</i> that the bias correction uses. Two numbers per weight make it twice as many numbers as the model itself.</p>
+  <p>A <b>checkpoint</b> is a saved copy of a model. Public releases contain the weights, usually in bf16, a 16-bit number format that takes 2 bytes. AdamW keeps <i>m</i> and <i>v</i> in fp32, at 4 bytes apiece, so 8 bytes per weight. Shipping them would make a download about five times larger, and releases leave them out. Among the model families in the study, only OLMo-2 publishes its AdamW buffers.</p>
+  <div class="card" id="w-bytes">
+    <div class="bar"><div class="group" role="group" aria-label="Model" id="by-models"></div></div>
+    <svg id="by-svg" role="img" aria-label="Bytes per parameter for the weights and the optimizer state, and total download sizes"></svg>
+  </div>
+  <p class="cap"><b>Bytes per parameter</b> and the resulting download sizes, with parameter counts rounded.</p>
+</section>
+
+<!-- 6 -->
+<section id="s-cold" aria-labelledby="s-cold-h">
+  <h2 id="s-cold-h">The cold restart</h2>
+  <p><b>Continued pre-training</b> (CPT) takes a released checkpoint and trains it further on text from a new domain, such as clinical notes or Python code. The released weights are written <i>&theta;</i>* (theta star). Without the optimizer state, AdamW starts from <i>m</i> = <i>v</i> = 0. This is a <b>cold start</b>.</p>
+  <p>On the first step, bias correction gives <i>m&#770;</i> = <i>g</i> and <i>v&#770;</i> = <i>g</i><sup>2</sup>. The update for a weight is then &minus;<i>&eta;</i> &middot; <i>g</i>/|<i>g</i>| = &minus;<i>&eta;</i> &middot; sign(<i>g</i>). All weights move by the full learning rate at once, whatever their slope and whatever their noise. At a trained checkpoint most gradients are mostly noise, so most of these moves point in random directions.</p>
+  <p>Over the next steps, <i>v&#770;</i> averages only a few squared gradients and the step sizes stay off. The manuscript puts this window at about 1/(1 &minus; <i>&beta;</i><sub>2</sub>) steps, which is 20 steps for <i>&beta;</i><sub>2</sub> = 0.95. A <b>warm start</b> loads a sensible <i>m</i> and <i>v</i> instead, and the first steps are small from the start.</p>
+  <div class="card" id="w-cold">
+    <div class="bar">
+      <button type="button" class="btn" id="cd-play">Play</button>
+      <label class="ctl">step <input type="range" id="cd-t" min="1" max="60" step="1" value="1"> <output id="cd-t-out">1</output></label>
+    </div>
+    <svg id="cd-svg" role="img" aria-label="Step sizes of 200 weights under a cold start and a warm start, and their average over steps"></svg>
+    <p class="status" id="cd-note" aria-live="polite"></p>
+  </div>
+  <p class="cap"><b>Step sizes for 200 weights at a checkpoint, with made-up numbers.</b> A weight's gradient is a small signal plus noise of size 1. The strips show the size of a weight's step, in units of <i>&eta;</i>, at the chosen step, sorted from large to small. The curve below averages them. The warm start loads <i>m</i> and <i>v</i> from 200 earlier steps on the same kind of data.</p>
+  <p>The manuscript measures this directly. At LLaMA-3 8B with learning rate 10<sup>&minus;4</sup>, the cold start's smoothed training loss reached 2.39 nats at step 4, 0.4 above the checkpoint's own 1.98. The warm start from the rebuilt state reached 2.07, only 0.09 above. All four scales tested behave the same way.</p>
+  <div class="plates"><div class="plate"><figure><div class="frame"><img src="../img/early-steps.png" alt="Training loss over the first fine-tuning steps at four model scales for cold start, warm start and the full recipe." width="1800" height="501" loading="lazy"></div>
+    <figcaption class="cap"><b>The early jump at four scales</b>, from the supplement. Training loss over the first fine-tuning steps at learning rate 10<sup>&minus;4</sup>. The cold start (sand) climbs furthest above the checkpoint's own loss (dashed).</figcaption></figure></div></div>
+  <details class="check"><summary>Check yourself: why is the first cold-start step the same size for all weights?</summary>
+    <p>At <i>t</i> = 1, <i>m&#770;</i> = <i>g</i> and <i>v&#770;</i> = <i>g</i><sup>2</sup>, so <i>m&#770;</i>/&radic;<i>v&#770;</i> = <i>g</i>/|<i>g</i>| = &plusmn;1 when <i>&epsilon;</i> is negligible. The update is &minus;<i>&eta;</i> &middot; sign(<i>g</i>), so its size is <i>&eta;</i> for all weights.</p></details>
+  <details class="check"><summary>Check yourself: why does a warmed-up AdamW take small steps at a checkpoint?</summary>
+    <p>At a checkpoint the gradient of a weight is mostly noise with a small average. The running average <i>m&#770;</i> cancels much of the noise and stays small, while &radic;<i>v&#770;</i> reflects the full size of the noisy gradients. Their ratio is small, and the ratio sets the step.</p></details>
+</section>
+
+<!-- 7 -->
+<section id="s-forget" aria-labelledby="s-forget-h">
+  <h2 id="s-forget-h">Forgetting, and springs that resist it</h2>
+  <p>Training on new text moves weights that the old text relied on, and the model gets worse on the old text. This is <b>forgetting</b>. The manuscript calls the new text the <b>target</b> and the original kind of text the <b>source</b>. It measures forgetting as <b>forget-&Delta;</b>: the source loss after fine-tuning minus the source loss before, in nats. A positive value means the model forgot. The original training data is usually private, so from 1B to 8B the source loss is measured on FineWeb, a public web corpus, as a proxy. GPT-2 uses held-out text from its own training set.</p>
+  <p><b>Elastic weight consolidation</b> (EWC) attaches a spring to all weights, pulling them back toward the checkpoint:</p>
+  <div class="eqn">penalty = <i>&lambda;</i> &sum;<sub>i</sub> <i>F</i><sub>i</sub> (<i>&theta;</i><sub>i</sub> &minus; <i>&theta;</i><sub>i</sub>*)<sup>2</sup></div>
+  <p>The number <i>&lambda;</i> (lambda) sets the overall strength, and <i>F</i><sub>i</sub> sets the stiffness of the spring on weight <i>i</i>. EWC makes the spring stiff on weights the old task depends on and loose on the rest, so the model can still learn through the loose ones.</p>
+  <p>Which weights does the old task depend on? The <b>Fisher information</b> measures how strongly the old task's loss reacts when a weight moves. A common estimate, the <b>empirical Fisher</b>, is the average squared gradient on the old task's data. That is what AdamW's <i>v</i> tracks. A rebuilt <i>v</i> can therefore set the stiffness of the springs without the original data. The empirical Fisher can differ from the true Fisher (Kunstner et al., 2019), so the manuscript tests whether this one works in practice.</p>
+  <div class="card" id="w-spring">
+    <div class="bar">
+      <label class="ctl">anchor strength <i>&lambda;</i> <input type="range" id="sp-lam" min="-2" max="2" step="0.05" value="0"> <output id="sp-lam-out">1</output></label>
+      <div class="group" role="group" aria-label="Which anchors to show" id="sp-show">
+        <button type="button" data-sp="both" aria-pressed="true">both anchors</button>
+        <button type="button" data-sp="ewc" aria-pressed="false">Fisher-weighted</button>
+        <button type="button" data-sp="uni" aria-pressed="false">uniform</button>
+      </div>
+    </div>
+    <svg id="sp-svg" role="img" aria-label="Fine-tuning end points with no anchor, a uniform anchor and a Fisher-weighted anchor, and the trade-off between learning and forgetting"></svg>
+    <p class="status" id="sp-note" aria-live="polite"></p>
+  </div>
+  <p class="cap"><b>A two-weight toy with made-up numbers.</b> Left: the old task's loss (dashed sand) is steep in the vertical direction and flat in the horizontal one. The new task's minimum is the cross. Fine-tuning ends where the new loss plus the penalty is lowest. The uniform anchor uses the same stiffness on both weights, with the same total as the Fisher-weighted one. Right: as <i>&lambda;</i> grows, a run learns less and forgets less. Lower left is better, and the Fisher-weighted curve lies below the uniform one between their shared end points. When the old loss is a bowl whose curvature is <i>F</i>, the Fisher-weighted anchor traces the best possible trade-off.</p>
+  <details class="check"><summary>Check yourself: why not give all weights the same stiffness?</summary>
+    <p>A uniform spring resists the moves the new task needs as much as the moves that hurt the old task. The manuscript tested this on Pythia 1B. A uniform anchor with the same overall strength forgot about 2.3 times more than the rebuilt <i>v</i>, at nearly the same target loss.</p></details>
+  <details class="check"><summary>Check yourself: why can <i>v</i> serve as a Fisher estimate?</summary>
+    <p>The empirical Fisher for a weight is the average of its squared gradient, and <i>v</i> is a running average of the squared gradient. The two match when <i>v</i> is measured at the checkpoint on data like the old task's.</p></details>
+</section>
+
+<!-- 8 -->
+<section id="s-rebuild" aria-labelledby="s-rebuild-h">
+  <h2 id="s-rebuild-h">Rebuilding the state</h2>
+  <p>The recovery needs the released checkpoint <i>&theta;</i>* and some public text. It takes two short runs from <i>&theta;</i>*, about 210 forward and backward passes in total, and the weights barely move in either.</p>
+  <ol class="recipe">
+    <li><b>Start from the checkpoint.</b> Load <i>&theta;</i>* and create a fresh AdamW with <i>m</i> = <i>v</i> = 0. Use the model's own training settings: <i>&beta;</i><sub>1</sub> = 0.9, <i>&beta;</i><sub>2</sub> = 0.95, and its own <i>&epsilon;</i> and weight decay.</li>
+    <li><b>Probe run, 10 steps.</b> Run <i>K</i> = 10 AdamW steps on public text at learning rate 10<sup>&minus;6</sup>, with weight decay off. Keep the change in the weights on the last step, &Delta;<i>&theta;</i><sub>K</sub>, and the probe's own <i>v&#770;</i>.</li>
+    <li><b>Fisher run, 200 tiny steps.</b> Start again from <i>&theta;</i>* with a fresh optimizer. Run <i>K</i><sub>v</sub> = 200 steps at learning rate 10<sup>&minus;7</sup>, weight decay off. The weights move by about 10<sup>&minus;7</sup> per step, so the gradients all come from <i>&theta;</i>*. The bias-corrected <i>v</i> at the end is the rebuilt second moment, <i>v</i><sub>rec</sub> = <i>v</i><sub>200</sub> / (1 &minus; 0.95<sup>200</sup>). Since 0.95<sup>200</sup> is about 0.00004, the correction is almost 1.</li>
+    <li><b>Rebuild <i>m</i>.</b> The probe's last step followed the AdamW update, so it can be solved for <i>m&#770;</i>, with <i>v</i><sub>rec</sub> in place of the probe's own <i>v&#770;</i>. In effect, the probe's <i>m</i> is rescaled per weight by (&radic;<i>v</i><sub>rec</sub> + <i>&epsilon;</i>) / (&radic;<i>v&#770;</i> + <i>&epsilon;</i>). This makes it agree with the better estimate of <i>v</i>.</li>
+    <li><b>Use it.</b> Load (<i>m</i><sub>rec</sub>, <i>v</i><sub>rec</sub>) into the fine-tuning optimizer for a warm start. Then turn on the anchor <i>&lambda;</i> &sum; <i>v</i><sub>rec,i</sub> (<i>&theta;</i><sub>i</sub> &minus; <i>&theta;</i><sub>i</sub>*)<sup>2</sup>. Weight decay stays on during fine-tuning and pulls toward zero, while the anchor pulls toward <i>&theta;</i>*.</li>
+  </ol>
+  <div class="eqn eqn-card"><span class="eq-note">Step 4 in symbols, with weight decay off as in the probe run (supplement, Section B.1):</span><br>
+    <i>m&#770;</i><sub>K</sub> = &minus;(&Delta;<i>&theta;</i><sub>K</sub> / <i>&eta;</i>) &middot; (<span class="rad">&radic;<span class="ov"><i>v</i><sub>rec</sub></span></span> + <i>&epsilon;</i>) &emsp; <i>m</i><sub>rec</sub> = <i>m&#770;</i><sub>K</sub> &middot; (1 &minus; <i>&beta;</i><sub>1</sub><sup>K</sup>)</div>
+  <div class="card" id="w-fisher">
+    <div class="bar">
+      <button type="button" class="btn" id="fr-play">Play the Fisher run</button>
+      <label class="ctl">step <input type="range" id="fr-t" min="1" max="200" step="1" value="200"> <output id="fr-t-out">200</output></label>
+      <div class="group" role="group" aria-label="Which v to show">
+        <button type="button" data-fr="hat" aria-pressed="true">corrected v&#770;</button>
+        <button type="button" data-fr="raw" aria-pressed="false">raw v</button>
+      </div>
+    </div>
+    <svg id="fr-svg" role="img" aria-label="The two recovery runs on a step axis, and the estimate of v for four weights converging over 200 steps"></svg>
+    <p class="status" id="fr-note" aria-live="polite"></p>
+  </div>
+  <p class="cap"><b>The 200-step Fisher run for four weights, with made-up numbers.</b> The weights have average squared gradients from 10<sup>&minus;6</sup> to 1 (dashed lines), so the vertical axis is logarithmic. The corrected estimate is noisy but on the right scale from the first step. The raw <i>v</i> starts at zero and needs a few dozen steps to climb.</p>
+  <h3 class="sub-h">Details that matter in practice</h3>
+  <ul class="tight">
+    <li>When the rebuilt state is loaded for fine-tuning, the step counter is set to 10,000. PyTorch's own bias correction, 1 &minus; <i>&beta;</i><sup>t</sup>, is then about 1 and does not inflate the state a second time.</li>
+    <li>Because <i>&beta;</i><sub>2</sub> = 0.95, <i>v</i><sub>rec</sub> leans on the most recent 20 or so batches. A plain average of <i>g</i><sup>2</sup> over all 200 batches gives nearly the same anchor, with rank correlation 0.93 at equal norm, and nearly the same fine-tuning results.</li>
+    <li>The recovery text differs by scale: FineWeb at 1B and 3B, GPT-2's own training text for the check against true state, and the fine-tuning text at 8B.</li>
+    <li>At 8B, a warm start whose <i>m</i> came from FineWeb diverged at learning rate 10<sup>&minus;4</sup>, because <i>m</i><sub>rec</sub> is a smoothed gradient on the recovery text. The supplement's advice is to estimate the anchor on any broad public corpus and take <i>m</i><sub>rec</sub> from the text you are about to fine-tune on.</li>
+  </ul>
+  <h3 class="sub-h">Ways the recovery goes wrong</h3>
+  <ul class="tight">
+    <li><b>Wrong <i>&epsilon;</i>.</b> The state comes out at the wrong scale, with no error.</li>
+    <li><b>Recovery text far from the training text.</b> Then <i>v</i><sub>rec</sub> measures the Fisher of the recovery text more than the model's.</li>
+    <li><b>Probe learning rate too large.</b> Above 10<sup>&minus;5</sup> the weights drift away from <i>&theta;</i>*, and the inversion in step 4 is done at the wrong point.</li>
+    <li><b>A broken checkpoint conversion.</b> In OLMo-2, one conversion read the two halves of a fused feed-forward weight in the wrong order. The model had correct tensor sizes and a loss of 15.0 on web text, against 2.4 for the intact model. Scoring the converted model on reference text catches this.</li>
+  </ul>
+  <details class="check"><summary>Check yourself: why is the learning rate of the Fisher run so small?</summary>
+    <p>The goal is the curvature at <i>&theta;</i>* itself. At 10<sup>&minus;7</sup> the weights barely move over 200 steps, so all the squared gradients that build <i>v</i> are measured at the checkpoint and not at a drifted point.</p></details>
+  <details class="check"><summary>Check yourself: why 200 steps?</summary>
+    <p>So that the bias correction 1 &minus; <i>&beta;</i><sub>2</sub><sup>200</sup> is close to 1 for <i>&beta;</i><sub>2</sub> = 0.95, and <i>v</i> has averaged many batches. The supplement gives this reason in Section A.2.</p></details>
+</section>
+
+<!-- 9 -->
+<section id="s-check" aria-labelledby="s-check-h">
+  <h2 id="s-check-h">Checking against the true state</h2>
+  <p>Only two settings allow a check against the true optimizer state. The authors trained a GPT-2 Small (124M parameters) from scratch on OpenWebText and saved its <i>m</i> and <i>v</i>. OLMo-2-7B is, to the authors' knowledge, the one public model released with its optimizer state.</p>
+  <p>Comparing two lists of millions of numbers needs a summary. <b>Cosine similarity</b> compares direction and ignores overall scale; it is 1 when one list is a positive multiple of the other. <b>Spearman's rank correlation</b> <i>&rho;</i> (rho) compares the order of the values; it is 1 when both lists rank the weights the same way. A <b>per-tensor</b> figure is computed inside one weight matrix and summarised by the median across matrices. A <b>global</b> figure pools all weights, so it partly reflects differences in scale between matrices.</p>
+  <div class="card" id="w-scale">
+    <div class="bar">
+      <div class="group" role="group" aria-label="Scale of the rebuilt v">
+        <button type="button" data-sc="18" aria-pressed="true">rebuilt v 18 times larger</button>
+        <button type="button" data-sc="1" aria-pressed="false">rescaled to match</button>
+      </div>
+    </div>
+    <svg id="sc-svg" role="img" aria-label="Scatter of rebuilt against true v on logarithmic axes, with similarity scores and penalty strength"></svg>
+    <p class="status" id="sc-note" aria-live="polite"></p>
+  </div>
+  <p class="cap"><b>Similarity ignores scale, and the penalty does not.</b> Made-up values for 300 weights in three matrices of different scale. Scaling the rebuilt <i>v</i> leaves cosine similarity and <i>&rho;</i> unchanged, and multiplies the penalty strength <i>&lambda;</i> &middot; &#8214;<i>v</i>&#8214;<sub>1</sub> by the same factor. &#8214;<i>v</i>&#8214;<sub>1</sub> is the sum of all entries.</p>
+  <h3 class="sub-h">What the manuscript measured</h3>
+  <div class="table-wrap">
+  <table class="data">
+    <thead><tr><th>measure</th><th>GPT-2, 124M</th><th>OLMo-2, 7B</th></tr></thead>
+    <tbody>
+      <tr><td>recovery text</td><td>its own training text</td><td>FineWeb</td></tr>
+      <tr><td>cosine similarity of <i>v</i></td><td>0.86 to 0.87</td><td>not reported</td></tr>
+      <tr><td>raw global <i>&rho;</i></td><td>0.90</td><td>0.51</td></tr>
+      <tr><td>rank-normalized global <i>&rho;</i></td><td>0.71</td><td>0.33</td></tr>
+      <tr><td>median per-tensor <i>&rho;</i></td><td>0.67</td><td>0.25</td></tr>
+      <tr><td>&#8214;<i>v</i><sub>rec</sub>&#8214;<sub>1</sub> / &#8214;<i>v</i><sub>true</sub>&#8214;<sub>1</sub></td><td>18.3</td><td>0.33</td></tr>
+      <tr><td>cosine similarity of <i>m</i></td><td>0.966 &plusmn; 0.001</td><td>near 0, as from any text other than the training text</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>A reference point helps with OLMo-2. Its own buffer changes along training: the true <i>v</i> at 510k steps and at 928k steps agree only to a median per-tensor <i>&rho;</i> of 0.49. The rebuilt <i>m</i> matches the true one only on the training text, because <i>m</i> depends on the last few batches before the checkpoint, which one checkpoint cannot reveal. The manuscript judges <i>m</i><sub>rec</sub> by its effect on fine-tuning instead.</p>
+  <h3 class="sub-h">The test that counts: protection at matched strength</h3>
+  <p>The functional test uses both anchors to protect the same fine-tuning run and compares forgetting. Because the norms differ, it first matches <i>&lambda;</i> &middot; &#8214;<i>v</i>&#8214;<sub>1</sub>.</p>
+  <ul class="tight">
+    <li><b>GPT-2</b>, learning rate 10<sup>&minus;4</sup>, three seeds: the rebuilt <i>v</i> at <i>&lambda;</i> = 10<sup>6</sup> gives forget-&Delta; +0.056 &plusmn; 0.002. The true <i>v</i> at the matched <i>&lambda;</i> = 1.8 &times; 10<sup>7</sup> gives +0.052 &plusmn; 0.002. At the unmatched <i>&lambda;</i> = 10<sup>6</sup>, the true <i>v</i> gives +0.122. The rebuilt <i>v</i> brought down to that strength (<i>&lambda;</i> = 5.5 &times; 10<sup>4</sup>) gives +0.125. The two anchors agree once strength is matched.</li>
+    <li><b>OLMo-2 7B</b>, 5M tokens: at <i>&lambda;</i> = 10<sup>6</sup> the rebuilt <i>v</i> gives +0.131 &plusmn; 0.004 and the released <i>v</i> +0.176 &plusmn; 0.004. The released <i>v</i> at matched strength gives +0.221 &plusmn; 0.004, and a cold start +0.426 &plusmn; 0.005. The rebuilt <i>v</i> protects better at all three strengths tested.</li>
+    <li><b>OLMo-2 7B</b>, 50M tokens, one seed: forget-&Delta; +0.172 for the rebuilt <i>v</i>, +0.356 for the released one and +0.853 for a cold start.</li>
+  </ul>
+  <p>The manuscript's reading: fine-tuning needs a fresh measure of the curvature at <i>&theta;</i>*, and the rebuild provides one. Why the fresh estimate beats the released buffer is left open. The manuscript names two candidate reasons: the buffer may be stale from the final stretch of training, or batch size may affect the estimate.</p>
+  <details class="check"><summary>Check yourself: why compare at matched <i>&lambda;</i> &middot; &#8214;<i>v</i>&#8214;<sub>1</sub> and not at the same <i>&lambda;</i>?</summary>
+    <p>The penalty grows with both <i>&lambda;</i> and the size of <i>v</i>. At GPT-2 the rebuilt <i>v</i> is about 18 times larger, so at the same <i>&lambda;</i> it pulls 18 times harder. A fixed-<i>&lambda;</i> comparison would measure that gap in scale instead of the quality of the anchor.</p></details>
+</section>
+
+<!-- 10 -->
+<section id="s-results" aria-labelledby="s-results-h">
+  <h2 id="s-results-h">Reading the results</h2>
+  <p>The results use a few measures. <b>Target loss</b> is the loss on held-out new text; lower means the model learned more. <b>Forget-&Delta;</b> is the rise in source loss. <b>BWT</b> (backward transfer) is the change in mean accuracy over eight standard benchmarks, in points; negative means the model lost accuracy. A value written 0.264 &plusmn; 0.005 is a mean over seeds with its standard deviation, where a seed is one independent run with different randomness.</p>
+  <p>Five conditions switch the two uses of the rebuilt state on and off. Build one below to see its numbers from the manuscript's higher-rate stress test.</p>
+  <div class="card" id="w-cond">
+    <div class="bar">
+      <div class="group" role="group" aria-label="Model" id="cn-scales"></div>
+    </div>
+    <div class="bar">
+      <span class="label">warm start</span>
+      <div class="group" role="group" aria-label="Warm start" id="cn-warm">
+        <button type="button" data-w="none" aria-pressed="true">none</button>
+        <button type="button" data-w="v" aria-pressed="false"><i>v</i> only</button>
+        <button type="button" data-w="mv" aria-pressed="false"><i>m</i> and <i>v</i></button>
+      </div>
+      <span class="label">anchor</span>
+      <div class="group" role="group" aria-label="Anchor" id="cn-anchor">
+        <button type="button" data-a="off" aria-pressed="false">off</button>
+        <button type="button" data-a="on" aria-pressed="true">on</button>
+      </div>
+    </div>
+    <p class="cond-name" id="cn-name" aria-live="polite"></p>
+    <div class="dial-cards cond-cards" id="cn-cards"></div>
+    <p class="status" id="cn-note" aria-live="polite"></p>
+  </div>
+  <p class="cap"><b>Higher-rate stress test</b> (Table 2 of the manuscript): learning rate 10<sup>&minus;4</sup> on clinical text (HC4), 5M tokens, <i>&lambda;</i> = 10<sup>6</sup>, three seeds. At this budget a cold start at a lower learning rate beats all of these runs. The grid is a stress test at a rate that is too high for the budget, and a poor choice of setting in practice.</p>
+  <h3 class="sub-h">The main findings, with their numbers</h3>
+  <ul class="tight">
+    <li><b>Same learning, less forgetting.</b> At Pythia 1B and conservative learning rates, a cold start matched to the recipe's target loss forgets 1.5 to 3.4 times more. At Qwen2.5-3B, the recipe at <i>&lambda;</i> = 10<sup>5</sup> reaches the best cold-start target with 4 times less drift.</li>
+    <li><b>LLaMA-3 8B at a conservative rate</b> (10<sup>&minus;5</sup>, 100M tokens, three seeds): target 1.998 against 2.003 for cold, and forget-&Delta; +0.048 against +0.091, 1.9 times less. The warm start alone tracks cold here, so the anchor gives the effect.</li>
+    <li><b>The stress test at 8B:</b> the full recipe's benchmark score is 5.89 points above cold over three seeds, and one of the three cold runs diverged.</li>
+    <li><b>The per-weight pattern matters.</b> On Pythia 1B, anchors with the same overall strength but a uniform or shuffled stiffness forget 2.3 to 2.6 times more than the rebuilt <i>v</i>.</li>
+    <li><b>Penalty strength grows with scale.</b> The best <i>&lambda;</i> is 10<sup>7</sup> at 1B and 3B and higher at 8B. The tables use 10<sup>6</sup> throughout, which understates the tuned recipe.</li>
+    <li><b>Against other methods.</b> On Pythia 1B with 100M tokens, LoRA (rank 32) reaches target 2.408 with forget-&Delta; +0.204, and the full recipe 2.362 with +0.014: more learning and 15 times less forgetting. Replay of 5% FineWeb protects the corpus it replays best, while the anchor protects more broadly; the two are complementary. Weight interpolation (WiSE-FT) is a strong training-free baseline, and the anchored run is 0.001 to 0.002 nats inside its curve, within seed noise.</li>
+  </ul>
+  <h3 class="sub-h">Limits</h3>
+  <p>Recovery applies to AdamW only. From 1B to 8B, forgetting is measured on FineWeb as a proxy for the original training data. Fine-tuning budgets span 5M to 250M tokens, and the study covers four decoder-only model families. At 124M parameters the protection fades by 250M tokens.</p>
+  <details class="check"><summary>Check yourself: which part of the recipe reduces forgetting, and which part prevents the early jump?</summary>
+    <p>The anchor reduces forgetting; it acts at all steps. The warm start prevents the early jump; it matters in the first 1/(1 &minus; <i>&beta;</i><sub>2</sub>) steps, mostly at high learning rates and short budgets.</p></details>
+  <details class="check"><summary>Check yourself: what does "lower left is better" mean on a frontier plot?</summary>
+    <p>The horizontal axis is target loss and the vertical axis is forgetting. A point further left learned more, and a point further down forgot less. A method dominates another when it is at least as good on both axes.</p></details>
+</section>
+
+<!-- 11 -->
+<section id="s-mine" aria-labelledby="s-mine-h">
+  <h2 id="s-mine-h">My part</h2>
+  <p>I started the project on small models, first an MLP on MNIST and then a ResNet-18 on CIFAR-10. I built a pipeline for both SGD with momentum and AdamW. It saves a model's optimizer buffers during training and continues training from the saved weights alone with a fresh optimizer. It then compares the new buffers with the saved ones, layer by layer.</p>
+  <p>The manuscript's GPT-2 experiment uses the same design at language-model scale: train with the optimizer state saved, rebuild it, and compare. The sections above on optimizer state, rebuilding and checking against the true state cover the ideas that pipeline tests.</p>
+</section>
+
+<section id="glossary" aria-labelledby="glossary-h">
+  <h2 id="glossary-h">Glossary</h2>
+  <dl class="gloss">
+    <dt>AdamW</dt><dd>Adam with decoupled weight decay: the decay is applied outside the per-weight scaling.</dd>
+    <dt>batch</dt><dd>A small random sample of training text used to estimate the gradient for one step.</dd>
+    <dt><i>&beta;</i><sub>1</sub>, <i>&beta;</i><sub>2</sub></dt><dd>Memory factors of the running averages <i>m</i> and <i>v</i>; 0.9 and 0.95 in the manuscript.</dd>
+    <dt>bf16, fp32</dt><dd>Number formats of 2 and 4 bytes. Weights are released in bf16; AdamW keeps <i>m</i> and <i>v</i> in fp32.</dd>
+    <dt>bias correction</dt><dd>Division by 1 &minus; <i>&beta;</i><sup>t</sup>, which undoes the pull toward zero of running averages that start at zero.</dd>
+    <dt>BWT</dt><dd>Backward transfer: the change in mean benchmark accuracy after fine-tuning, in points.</dd>
+    <dt>checkpoint, <i>&theta;</i>*</dt><dd>A saved copy of a model's weights; <i>&theta;</i>* is the released one.</dd>
+    <dt>cold start, warm start</dt><dd>Fine-tuning with <i>m</i> = <i>v</i> = 0, or with a loaded state such as (<i>m</i><sub>rec</sub>, <i>v</i><sub>rec</sub>).</dd>
+    <dt>continued pre-training (CPT)</dt><dd>Further training of a released model on text from a new domain.</dd>
+    <dt>cosine similarity</dt><dd>Agreement in direction between two lists of numbers, blind to overall scale.</dd>
+    <dt>EWC</dt><dd>Elastic weight consolidation: a penalty <i>&lambda;</i> &sum; <i>F</i><sub>i</sub> (<i>&theta;</i><sub>i</sub> &minus; <i>&theta;</i><sub>i</sub>*)<sup>2</sup> that pulls weights back toward the checkpoint.</dd>
+    <dt><i>&epsilon;</i></dt><dd>A small constant added to &radic;<i>v&#770;</i> before dividing; 10<sup>&minus;8</sup> for most models here and 10<sup>&minus;6</sup> for Qwen2.5.</dd>
+    <dt>Fisher information, empirical Fisher</dt><dd>How strongly a loss reacts to moving a weight; the empirical version is the average squared gradient.</dd>
+    <dt>forget-&Delta;</dt><dd>Source loss after fine-tuning minus source loss before, in nats.</dd>
+    <dt>gradient</dt><dd>The slope of the loss, one number per weight, pointing uphill.</dd>
+    <dt><i>&lambda;</i></dt><dd>The overall strength of the EWC penalty.</dd>
+    <dt>learning rate <i>&eta;</i></dt><dd>The number that sets the length of a step.</dd>
+    <dt>LoRA</dt><dd>Low-rank adaptation: the weights stay frozen and a small add-on is trained.</dd>
+    <dt>loss, nat</dt><dd>One number for how badly the model does; for language models, the average surprise at the next token, in natural-log units.</dd>
+    <dt><i>m</i>, first moment</dt><dd>The running average of the gradient.</dd>
+    <dt>&#8214;<i>v</i>&#8214;<sub>1</sub></dt><dd>The sum of all entries of <i>v</i>, used to match penalty strengths.</dd>
+    <dt>optimizer state</dt><dd>What AdamW keeps between steps: <i>m</i>, <i>v</i> and the step counter.</dd>
+    <dt>replay</dt><dd>Mixing some old-domain text into fine-tuning batches.</dd>
+    <dt>seed</dt><dd>One independent run with its own randomness; results report the mean and standard deviation over seeds.</dd>
+    <dt>SGD</dt><dd>Stochastic gradient descent: steps against gradients estimated from batches.</dd>
+    <dt>source, target</dt><dd>The original kind of text, and the new text of fine-tuning.</dd>
+    <dt>Spearman's <i>&rho;</i></dt><dd>Agreement in the ranking of two lists of numbers.</dd>
+    <dt><i>v</i>, second moment</dt><dd>The running average of the squared gradient; its square root is the typical gradient size.</dd>
+    <dt>weight decay <i>w</i></dt><dd>A steady pull of all weights toward zero.</dd>
+  </dl>
+</section>
+
+<footer>
+  <span><a href="../">&larr; Project page</a> &middot; <a class="mail mail-sm" href="#glossary" data-n="yar" data-d="ni.baliam" aria-label="Email Rayhaan" title="Write an email"><span class="mail-art"><img src="../../../assets/img/email.png" alt="" width="1008" height="124"></span></a></span>
+  <span><button type="button" class="theme-toggle" id="theme-toggle">dark mode</button></span>
+</footer>
+
+</main>
+<script src="../../../assets/site.js?v=3" defer></script>
+<script src="primer.js?v=1" defer></script>
+</body>
+</html>
