@@ -415,10 +415,41 @@ footer {
   * { transition: none !important; animation: none !important; }
 }
 
+/* ---------- email address ----------
+   Drawn as an image so scrapers do not read it. The PNG also serves as a mask,
+   so the address takes the theme's link colour; the plain image is the fallback. */
+
+.mail-line { margin: 14px 0 0; }
+a.mail {
+  --mail-h: 30px;
+  display: inline-block;
+  vertical-align: calc(-0.37 * var(--mail-h));
+  line-height: 0;
+  color: var(--link);
+  background-image: none;
+}
+a.mail.mail-sm { --mail-h: 21px; }
+a.mail:hover, a.mail:focus-visible { color: var(--link-hover); }
+.mail-art { display: block; }
+.mail-art img { display: block; width: auto; height: var(--mail-h); }
+@supports (mask-image: none) or (-webkit-mask-image: none) {
+  .mail-art {
+    background-color: currentColor;
+    -webkit-mask: url("img/email.png") no-repeat 0 0 / 100% 100%;
+    mask: url("img/email.png") no-repeat 0 0 / 100% 100%;
+  }
+  .mail-art img { visibility: hidden; }
+}
+@media (forced-colors: active) {
+  .mail-art { forced-color-adjust: none; background-color: LinkText; }
+}
+
 @media print {
   .actions, .teaser figcaption button, .theme-toggle { display: none; }
   .figures[hidden] { display: grid; }
   a { color: inherit; }
+  .mail-art { -webkit-mask: none; mask: none; background: none; }
+  .mail-art img { visibility: visible; }
 }
 
 .field-title { margin: 0 0 6px; }

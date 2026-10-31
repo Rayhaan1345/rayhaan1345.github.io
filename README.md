@@ -8,3 +8,4 @@ The site is plain HTML, CSS and JavaScript with no build step. GitHub Pages serv
 - `assets/site.css` and `assets/site.js` hold the styles and the two interactive figures: the toy optimizer run and the In-Place TTT chart.
 - `assets/img/` holds the portrait and the figures from the papers.
 - `cv.pdf` is the current CV.
+- `assets/img/email.png` shows the contact address as an image, drawn in Bradley Hand Bold at 96 px on a transparent background, so scrapers do not read it. The email links hold the address in reversed pieces and assemble it only when clicked.

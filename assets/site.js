@@ -250,4 +250,13 @@
     var tb = document.querySelector('[aria-controls="ttt-figs"]');
     if (tb) tb.click();
   }
+
+  // ---------- email: drawn as an image; the address is assembled only on click ----------
+  function rev(t) { return t.split("").reverse().join(""); }
+  document.querySelectorAll("a.mail").forEach(function (a) {
+    a.addEventListener("click", function (e) {
+      e.preventDefault();
+      window.location.href = "mailto:" + rev(a.dataset.n) + "@" + rev(a.dataset.d);
+    });
+  });
 })();
