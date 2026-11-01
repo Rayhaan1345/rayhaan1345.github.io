@@ -76,3 +76,6 @@ table.data td { color: var(--ink-2); font-feature-settings: "lnum" 1; }
 @media (prefers-reduced-motion: reduce) {
   .cond-cards .meter span { transition: none; }
 }
+
+/* Links to the matching chapters of the How AI Learns primer. */
+.proj p.more { max-width: 46em; margin: 8px 0 18px; padding: 6px 12px; border-left: 3px solid var(--sand); font-size: 15px; color: var(--ink-2); }

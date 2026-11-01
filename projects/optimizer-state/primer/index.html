@@ -17,7 +17,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;1,400&family=Spectral+SC:wght@500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../../../assets/site.css?v=3">
 <link rel="stylesheet" href="../../../assets/project.css?v=3">
-<link rel="stylesheet" href="primer.css?v=1">
+<link rel="stylesheet" href="primer.css?v=2">
 <script>try{var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
 </head>
 <body>
@@ -109,6 +109,7 @@
     <p>About 1/(1 &minus; 0.95) = 20 steps. Older squared gradients still count, with weights that shrink by a factor of 0.95 per step.</p></details>
   <details class="check"><summary>Check yourself: why does Adam need bias correction?</summary>
     <p>Because <i>m</i> and <i>v</i> start at zero. After one step, <i>m</i> is only 0.1 <i>g</i> and <i>v</i> is only 0.05 <i>g</i><sup>2</sup>. Dividing by 1 &minus; <i>&beta;</i><sup>t</sup> scales them back up to the size of the gradients seen so far.</p></details>
+  <p class="more">For momentum and running averages with interactive figures, see <a href="https://mailab.in/primer/b5-optimisers/#momentum">B5, Optimisers</a>, in the How AI Learns primer.</p>
 </section>
 
 <!-- 3 -->
@@ -137,6 +138,7 @@
     <p>It applies weight decay outside the division by &radic;<i>v&#770;</i>. All weights shrink toward zero by the same fraction <i>&eta;</i><i>w</i> per step. In plain Adam with an L2 penalty, the decay term would be divided by &radic;<i>v&#770;</i> along with the gradient, so weights with large gradients would barely decay.</p></details>
   <details class="check"><summary>Check yourself: why does dividing by &radic;<i>v&#770;</i> help on a narrow valley?</summary>
     <p>Across the valley the gradients are large, so &radic;<i>v&#770;</i> is large and the step shrinks. Along the valley the gradients are small, so &radic;<i>v&#770;</i> is small and the step grows. Both directions move at a similar pace, roughly <i>&eta;</i> per step, instead of one learning rate fitting neither.</p></details>
+  <p class="more">For Adam and AdamW built up step by step, see <a href="https://mailab.in/primer/b5-optimisers/#adam">B5, Optimisers</a>, in the How AI Learns primer.</p>
 </section>
 
 <!-- 4 -->
@@ -164,6 +166,7 @@
     <svg id="by-svg" role="img" aria-label="Bytes per parameter for the weights and the optimizer state, and total download sizes"></svg>
   </div>
   <p class="cap"><b>Bytes per parameter</b> and the resulting download sizes, with parameter counts rounded.</p>
+  <p class="more">For what the optimiser state holds and what is lost without it, see <a href="https://mailab.in/primer/b5-optimisers/#state">B5, Optimisers</a>, in the How AI Learns primer.</p>
 </section>
 
 <!-- 6 -->
@@ -215,6 +218,7 @@
     <p>A uniform spring resists the moves the new task needs as much as the moves that hurt the old task. The manuscript tested this on Pythia 1B. A uniform anchor with the same overall strength forgot about 2.3 times more than the rebuilt <i>v</i>, at nearly the same target loss.</p></details>
   <details class="check"><summary>Check yourself: why can <i>v</i> serve as a Fisher estimate?</summary>
     <p>The empirical Fisher for a weight is the average of its squared gradient, and <i>v</i> is a running average of the squared gradient. The two match when <i>v</i> is measured at the checkpoint on data like the old task's.</p></details>
+  <p class="more">For Fisher information and elastic weight consolidation, see <a href="https://mailab.in/primer/b7-continual-learning/#ewc">B7, Fine-tuning, forgetting and continual learning</a>, in the How AI Learns primer.</p>
 </section>
 
 <!-- 8 -->

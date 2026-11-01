@@ -75,3 +75,6 @@
   .two-col { grid-template-columns: 1fr; }
   .ctl input[type="range"] { width: 110px; }
 }
+
+/* Links to the matching chapters of the How AI Learns primer. */
+.proj p.more { max-width: 46em; margin: 8px 0 18px; padding: 6px 12px; border-left: 3px solid var(--sand); font-size: 15px; color: var(--ink-2); }

@@ -17,7 +17,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;1,400&family=Spectral+SC:wght@500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../../../assets/site.css?v=3">
 <link rel="stylesheet" href="../../../assets/project.css?v=3">
-<link rel="stylesheet" href="primer.css?v=3">
+<link rel="stylesheet" href="primer.css?v=4">
 <script>try{var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
 </head>
 <body>
@@ -71,6 +71,7 @@
     <svg id="tok-svg" role="img" aria-label="Tokens become vectors, the layers add to them, and the top turns the last vector into scores for the next token"></svg>
   </div>
   <p class="cap"><b>From text to a guess.</b> A token becomes a vector, the layers add to it, and the top turns the last vector into scores for the next token. The colours show made-up numbers, teal for positive and coral for negative.</p>
+  <p class="more">For how a tokenizer learns its pieces, and why some languages cost more tokens, see <a href="https://mailab.in/primer/d1-tokenisation/#bpe">D1, Tokenisation</a>, in the How AI Learns primer.</p>
 </section>
 
 <section id="attention" aria-labelledby="attention-h">
@@ -102,6 +103,7 @@
   <p class="cap"><b>Attention on a toy sentence.</b> Tap a token or a row of the grid to make it the one doing the looking. Bars show the weights it gives to the tokens it can see. In the grid, row <i>i</i> shows the weights of token <i>i</i>. The vectors are made up and have four numbers. Switching the mask off lets tokens see the future, which a trained model never does. The slider multiplies the scores, so a sharper setting puts more weight on the best match.</p>
   <h3 class="sub-h">Heads</h3>
   <p>The model runs attention as several heads side by side. A head has its own query, key and value matrices, so different heads can look for different things. A final matrix mixes the outputs of the heads back into one vector for the notepad.</p>
+  <p class="more">For queries, keys and values worked by hand, and the causal mask, see <a href="https://mailab.in/primer/d4-self-attention/#qkv">D4, Self-attention</a>, in the How AI Learns primer.</p>
 </section>
 
 <section id="kv" aria-labelledby="kv-h">
@@ -127,6 +129,7 @@
     <p class="status" id="kv-note" aria-live="polite">Press play or next step.</p>
   </div>
   <p class="cap"><b>Prefill, then decoding.</b> One layer is shown. Teal cells are keys and values computed in this step, and grey cells come from the cache. Without a cache, the model recomputes the keys and values of the whole text at all steps. The bars count the work so far: without a cache it grows with the square of the length.</p>
+  <p class="more">For the KV cache at the sizes of current models, see <a href="https://mailab.in/primer/d6-long-context/#cache">D6, Long context</a>, in the How AI Learns primer.</p>
 </section>
 
 <section id="block" aria-labelledby="block-h">
@@ -160,6 +163,7 @@
     <svg id="mlp-svg" role="img" aria-label="The output of a toy down projection as a weighted sum of its columns"></svg>
   </div>
   <p class="cap"><b><i>W h</i> as a weighted sum of columns.</b> A toy <i>W</i> with six rows and four columns. Move the sliders to change <i>h</i>. The output on the right is the sum of the scaled columns.</p>
+  <p class="more">For a transformer block step by step, see <a href="https://mailab.in/primer/d5-transformer/#block">D5, The transformer</a>, in the How AI Learns primer.</p>
 </section>
 
 <section id="fast" aria-labelledby="fast-h">
@@ -274,6 +278,7 @@
     <p class="status" id="tl-note" aria-live="polite"></p>
   </div>
   <p class="cap"><b>The same input, read twice.</b> Both models read the same prompt and generate the same tokens. Dashed lines mark chunk boundaries, and teal marks show where an update fires in the TTT lane. Labels show which version of <i>W</i> reads a chunk. The last generated token is never read back into the model, so it cannot complete a chunk.</p>
+  <p class="more">For test-time training on photos and on long text, see <a href="https://mailab.in/primer/c3-domain-shift/#ttt">C3, When the water changes</a> and <a href="https://mailab.in/primer/d6-long-context/#ttt">D6, Long context</a>, in the How AI Learns primer.</p>
 </section>
 
 <section id="side" aria-labelledby="side-h">

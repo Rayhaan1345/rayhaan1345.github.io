@@ -122,6 +122,7 @@
     <details><summary>Why can't you grade the model on its training women?</summary><p>It has seen their answers, so its score there is too kind and says little about new women.</p></details>
     <details><summary>When do you choose the held-out set?</summary><p>Before any learning or tuning. If you use it to pick settings, it stops being a fair test.</p></details>
   </div>
+  <p class="more">For validation sets, cross-validation and leakage in more detail, see <a href="https://mailab.in/primer/a4-grading-models/#splits">A4, Grading a model fairly</a>, in the How AI Learns primer.</p>
 </section>
 
 <section id="rule" aria-labelledby="rule-h">
@@ -319,6 +320,7 @@
     <details><summary>Does the app learn from what you type?</summary><p>No. Its numbers stay fixed until someone retrains it.</p></details>
     <details><summary>What is an embedding?</summary><p>A short list of learned numbers for a category, such as one age.</p></details>
   </div>
+  <p class="more">For why a hidden layer helps, see <a href="https://mailab.in/primer/b2-non-linearity/#lift">B2, Why non-linearity matters</a>. For how training walks downhill on the loss, see <a href="https://mailab.in/primer/b3-loss-gradient-descent/#landscape">B3, Loss and gradient descent</a>. Both are in the How AI Learns primer.</p>
 </section>
 
 <section id="cutoff" aria-labelledby="cutoff-h">
@@ -350,6 +352,7 @@
     <details><summary>Define sensitivity and specificity.</summary><p>Sensitivity is the share of women with diabetes the test catches. Specificity is the share without diabetes that it clears.</p></details>
     <details><summary>Why is the score here not a probability?</summary><p>The models were trained to push scores toward 0 or 1, and calibration was never checked.</p></details>
   </div>
+  <p class="more">For thresholds, ROC curves and AUC with interactive figures, see <a href="https://mailab.in/primer/a4-grading-models/#threshold">A4, Grading a model fairly</a>, in the How AI Learns primer.</p>
 </section>
 
 <section id="count" aria-labelledby="count-h">
@@ -405,6 +408,7 @@
     <details><summary>What is a SHAP value?</summary><p>An input's average added effect on the score over all the orders in which the inputs could be revealed.</p></details>
     <details><summary>Why do the SHAP values add up to the score minus the average?</summary><p>Along any one order, the added effects sum to the full score minus the average. Averaging over orders keeps that sum.</p></details>
   </div>
+  <p class="more">For SHAP values in more detail, see <a href="https://mailab.in/primer/a6-boosting/#shap">A6, Ensembles and boosting</a>, in the How AI Learns primer.</p>
 </section>
 
 <section id="limits" aria-labelledby="limits-h">
@@ -430,6 +434,7 @@
     <details><summary>Who is missing from this data, and who could be harmed if a clinic used the model anyway?</summary><p>Men, people under 21 and other populations are missing. A clinic serving them could see missed cases or needless worry. Testing on local data comes first, and retraining probably follows.</p></details>
     <details><summary>Why are the zeros a problem?</summary><p>A zero glucose, blood pressure or BMI is impossible, so it means "not measured". A model that reads it as a low value learns from a recording habit.</p></details>
   </div>
+  <p class="more">For subgroup checks and fairness scores, see <a href="https://mailab.in/primer/a4-grading-models/#subgroups">A4, Grading a model fairly</a> and <a href="https://mailab.in/primer/f1-fairness/#groups">F1, Data, fairness and privacy</a>, in the How AI Learns primer.</p>
 </section>
 
 <section id="comeback" aria-labelledby="comeback-h">
